@@ -1,10 +1,9 @@
 === Contact Form 7 Multi-Step Forms ===
 Contributors: webheadllc
-Donate Link: https://webheadcoder.com/donate-cf7-multi-step-forms
 Tags: contact form 7, multistep form, form, multiple pages, contact
 Requires at least: 4.7
 Tested up to: 6.6
-Stable tag: 4.4
+Stable tag: 4.4.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -16,7 +15,7 @@ I needed a contact form that spanned across multiple pages and in the end would 
 
 Sample of this working is at [https://webheadcoder.com/contact-form-7-multi-step-form/](https://webheadcoder.com/contact-form-7-multi-step-form/)
 
-Requires the [Contact Form 7 plugin](https://wordpress.org/plugins/contact-form-7/), version 4.8 or above, by Takayuki Miyoshi.
+Requires the [Contact Form 7 plugin](https://wordpress.org/plugins/contact-form-7/), version 5.2 or above, by Takayuki Miyoshi.
 
 **Usage**
 
@@ -54,6 +53,8 @@ Requires the [Contact Form 7 plugin](https://wordpress.org/plugins/contact-form-
 * **Skip Save** - If you use Flamingo or CFDB7 to save submissions to the database this prevents saving this form submission.
 
 * **Next Page URL** - This is the URL your users will go to after the form is submitted.
+
+`[multistep multistep-123 last_step send_email skip_save "/thank-you"]`
 
 **Additional Tags**
 
@@ -134,6 +135,11 @@ Make sure to check the "Skip Save" checkbox or have the skip_save attribute in t
 When checkboxes are not checked they aren't submitted through the form so the last step of the form doesn't know the unchecked checkbox field exists.  To get around this issue add a hidden form tag like `[hidden field-name]` to the last step.  This way the last step will either submit the previously set value or a blank value.
 
 == Changelog ==
+
+= 4.4.1 =
+* fixed error when cookie has an array in it.  
+* updated tag generator to be compatible with CF7 6.0.  
+* updated Freemius.  
 
 = 4.4 =
 * fixed checkbox and radio free text not saving between forms.  

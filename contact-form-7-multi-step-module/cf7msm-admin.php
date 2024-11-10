@@ -265,14 +265,13 @@ function cf7msm_form_tag_header_text( $header_description ) {
  * Links to help the plugin.
  */
 function cf7msm_form_tag_footer_text() {
-    $url_donate = 'https://webheadcoder.com/donate-cf7-multi-step-forms';
     $url_review = 'https://wordpress.org/support/view/plugin-reviews/contact-form-7-multi-step-module#postform';
 ?>
     <p class="description" style="font-size:12px;margin-top:0;padding-top:0;font-style:normal;">
         <?php 
         printf( cf7msm_kses( 
-            __( 'Like the Multi-step addition to CF7?  Let me know - <a href="%s" target="_blank">Donate</a> and <a href="%s" target="_blank">Review</a>.', 'contact-form-7-multi-step-module' )
-            ), $url_donate, $url_review );
+            __( 'Let me know how the Multi-Step forms are working for you <a href="%s" target="_blank">here</a>.', 'contact-form-7-multi-step-module' )
+            ), $url_review );
          ?>
     </p>
     <div style="position:absolute; right:25px; bottom:5px;">
@@ -340,3 +339,11 @@ function cf7msm_notice_response_big_cookie() {
     wp_send_json( 1 );
 }
 add_action('wp_ajax_cf7msm-notice-response-big-cookie', 'cf7msm_notice_response_big_cookie');
+
+
+/**
+ * Return true if we can use version 2 in CF7 6.0+
+ */
+function cf7msm_is_tg_v2() {
+    return ( version_compare( WPCF7_VERSION, '6.0' ) >= 0 );
+}

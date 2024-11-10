@@ -687,7 +687,11 @@ function cf7msm_cookie_size(  $posted_data = array()  ) {
                 continue;
             }
             $size += mb_strlen( $key, '8bit' );
-            $size += mb_strlen( $value, '8bit' );
+            if ( is_array( $value ) ) {
+                $size += mb_strlen( json_encode( $value, JSON_UNESCAPED_UNICODE ), '8bit' );
+            } else {
+                $size += mb_strlen( $value, '8bit' );
+            }
         }
     }
     return $size;

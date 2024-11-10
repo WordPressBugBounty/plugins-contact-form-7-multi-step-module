@@ -80,8 +80,14 @@ function cf7msm_back_shortcode_handler( $tag ) {
 function cf7msm_add_tag_generator_back() {
     if ( class_exists( 'WPCF7_TagGenerator' ) ) {
         $tag_generator = WPCF7_TagGenerator::get_instance();
-        $tag_generator->add( 'previous', esc_html( __( 'previous', 'contact-form-7-multi-step-module' ) ),
-            'cf7msm_previous_tag_pane', array( 'nameless' => 1 ) );
+
+        $generator_callback = cf7msm_is_tg_v2() ? 'cf7msm_previous_tag_pane' : 'cf7msm_previous_tag_pane_old';
+
+        $tag_generator->add( 'previous', 
+            esc_html( __( 'previous', 'contact-form-7-multi-step-module' ) ),
+            $generator_callback,
+            array( 'version' => '2' )
+        );
     }
     else if ( function_exists( 'wpcf7_add_tag_generator' ) ) {
 		wpcf7_add_tag_generator( 'back', esc_html( __( 'Back button', 'contact-form-7-multi-step-module' ) ),
@@ -96,6 +102,85 @@ add_action( 'admin_init', 'cf7msm_add_tag_generator_back', 55 );
  * Multistep tag pane.
  */
 function cf7msm_previous_tag_pane( $contact_form, $args = '' ) {
+
+    $args = wp_parse_args( $args, array() );
+?>
+
+<header class="description-box">
+	<h3>Multi Step form-tag generator</h3>
+
+	<p><?php cf7msm_form_tag_header_text( 'Generate a form-tag for a previous button for a multistep form' ); ?></p>
+</header>
+<div class="control-box cf7msm-multistep">
+    <input type="hidden" data-tag-part="basetype" value="previous">
+    <fieldset>
+        <legend id="<?php echo esc_attr( $args['content'] . '-name-legend' ); ?>">Name</legend>
+        <input type="text" data-tag-part="name" pattern="[A-Za-z][A-Za-z0-9_\-]*" aria-labelledby="<?php echo esc_attr( $args['content'] . '-name-legend' ); ?>">
+    </fieldset>
+    <fieldset>
+        <legend id="<?php echo esc_attr( $args['content'] . '-value' ); ?>"><?php echo esc_html( __( 'Label', 'contact-form-7-multi-step-module' ) ); ?></legend>
+        <input type="text" data-tag-part="value" aria-labelledby="<?php echo esc_attr( $args['content'] . '-value' ); ?>">
+        <p style="margin-bottom:0;">
+            <?php echo esc_html( __( 'The label on the button.', 'contact-form-7-multi-step-module' ) ) ?>
+        </p>
+    </fieldset>
+    <fieldset>
+        <legend id="<?php echo esc_attr( $args['content'] . '-idatt' ); ?>"><?php echo esc_html( __( 'ID Attribute', 'contact-form-7-multi-step-module' ) ); ?></legend>
+        <input type="text" data-tag-part="option" data-tag-option="id:" pattern="[A-Za-z][A-Za-z0-9_\-]*" aria-labelledby="<?php echo esc_attr( $args['content'] . '-idatt' ); ?>" />
+    </fieldset>
+    <fieldset>
+        <legend id="<?php echo esc_attr( $args['content'] . '-clasatt' ); ?>"><?php echo esc_html( __( 'Class Attribute', 'contact-form-7-multi-step-module' ) ); ?></legend>
+        <input type="text" data-tag-part="option" data-tag-option="class:" pattern="[A-Za-z0-9_\-\s]*" aria-labelledby="<?php echo esc_attr( $args['content'] . '-clasatt' ); ?>" />
+    </fieldset>
+</div>
+
+<footer class="insert-box">
+        <div class="flex-container">
+            <input type="text" class="code" readonly="readonly" onfocus="this.select();" data-tag-part="tag" aria-label="The form-tag to be inserted into the form template">
+            <button type="button" class="button button-primary" data-taggen="insert-tag"><?php echo esc_html( __( 'Insert Tag', 'contact-form-7-multi-step-module' ) ); ?></button>
+            
+        </div>
+        <p class="description mail-tag-tip"><label><?php echo esc_html( __( "This field should not be used on the Mail tab.", 'contact-form-7-multi-step-module' ) ); ?></label>
+        </p>
+        <?php cf7msm_form_tag_footer_text();?>
+</footer>
+<?php
+}
+
+/**
+ * Deprecated way to generate back tag.
+ */
+function wpcf7_cf7msm_back( $contact_form ) {
+?>
+<div id="wpcf7-cf7msm-back" class="hidden">
+<form action="">
+<table>
+<tr>
+<td><code>id</code> (<?php echo esc_html( __( 'optional', 'contact-form-7-multi-step-module' ) ); ?>)<br />
+<input type="text" name="id" class="idvalue oneline option" /></td>
+
+<td><code>class</code> (<?php echo esc_html( __( 'optional', 'contact-form-7-multi-step-module' ) ); ?>)<br />
+<input type="text" name="class" class="classvalue oneline option" /></td>
+</tr>
+
+<tr>
+<td><?php echo esc_html( __( 'Label', 'wpcf7' ) ); ?> (<?php echo esc_html( __( 'optional', 'contact-form-7-multi-step-module' ) ); ?>)<br />
+<input type="text" name="values" class="oneline" /></td>
+
+<td></td>
+</tr>
+</table>
+
+<div class="tg-tag"><?php echo esc_html( __( 'Copy this code and paste it into the form left.', 'contact-form-7-multi-step-module' ) ); ?><br /><input type="text" name="back" class="tag" readonly="readonly" onfocus="this.select()" /></div>
+</form>
+</div>
+<?php
+}
+
+/**
+ * Multistep tag pane.
+ */
+function cf7msm_previous_tag_pane_old( $contact_form, $args = '' ) {
 
     $args = wp_parse_args( $args, array() );
 ?>
@@ -140,35 +225,3 @@ function cf7msm_previous_tag_pane( $contact_form, $args = '' ) {
     </div>
 <?php
 }
-
-/**
- * Deprecated way to generate back tag.
- */
-function wpcf7_cf7msm_back( $contact_form ) {
-?>
-<div id="wpcf7-cf7msm-back" class="hidden">
-<form action="">
-<table>
-<tr>
-<td><code>id</code> (<?php echo esc_html( __( 'optional', 'contact-form-7-multi-step-module' ) ); ?>)<br />
-<input type="text" name="id" class="idvalue oneline option" /></td>
-
-<td><code>class</code> (<?php echo esc_html( __( 'optional', 'contact-form-7-multi-step-module' ) ); ?>)<br />
-<input type="text" name="class" class="classvalue oneline option" /></td>
-</tr>
-
-<tr>
-<td><?php echo esc_html( __( 'Label', 'wpcf7' ) ); ?> (<?php echo esc_html( __( 'optional', 'contact-form-7-multi-step-module' ) ); ?>)<br />
-<input type="text" name="values" class="oneline" /></td>
-
-<td></td>
-</tr>
-</table>
-
-<div class="tg-tag"><?php echo esc_html( __( 'Copy this code and paste it into the form left.', 'contact-form-7-multi-step-module' ) ); ?><br /><input type="text" name="back" class="tag" readonly="readonly" onfocus="this.select()" /></div>
-</form>
-</div>
-<?php
-}
-
-?>

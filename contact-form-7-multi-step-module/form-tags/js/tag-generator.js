@@ -17,9 +17,16 @@
         }
     });
 
-    $('form.tag-generator-panel .cf7msm-multistep input[name="last_step"]').change(function() {
+    $('form.tag-generator-panel .cf7msm-multistep #cf7msm-last_step').change(function() {
         if ($(this).is(":checked")) {
             $('input[name="send_email"]', $(this.form)).prop('checked', true);
+            $(".cf7msm-faq", $(this.form)).fadeIn();
+        }
+    });
+
+    $('form.tag-generator-panel .cf7msm-multistep #cf7msm-multiform-name').on('focus', function (e) {
+        if (this.value == ' ') {
+            this.value = '';
         }
     });
         

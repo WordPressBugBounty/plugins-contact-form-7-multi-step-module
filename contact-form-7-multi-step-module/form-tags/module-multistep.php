@@ -44,7 +44,14 @@ add_action( 'wpcf7_init', 'cf7msm_add_shortcode_multistep' );
 function cf7msm_add_tag_generator_multistep() {
     if ( class_exists( 'WPCF7_TagGenerator' ) ) {
         $tag_generator = WPCF7_TagGenerator::get_instance();
-        $tag_generator->add( 'multistep', esc_html( __( 'multistep', 'contact-form-7-multi-step-module' ) ), 'cf7msm_multistep_tag_generator' );
+
+        $generator_callback = cf7msm_is_tg_v2() ? 'cf7msm_multistep_tag_generator' : 'cf7msm_multistep_tag_generator_old';
+
+        $tag_generator->add( 'multistep',
+            __( 'multistep', 'contact-form-7-multi-step-module' ),
+            $generator_callback,
+            array( 'version' => '2' )
+        );
     }
 }
 add_action( 'admin_init', 'cf7msm_add_tag_generator_multistep', 30 );
@@ -125,6 +132,121 @@ function cf7msm_multistep_shortcode_handler_old( $tag ) {
  * Multistep tag pane.
  */
 function cf7msm_multistep_tag_generator( $contact_form, $args = '' ) {
+    $args = wp_parse_args( $args, array() );
+?>
+<header class="description-box">
+	<h3>Multi Step form-tag generator</h3>
+
+	<p><?php cf7msm_form_tag_header_text( 'Generate a form-tag to enable a multistep form' ); ?></p>
+</header>
+<div class="control-box cf7msm-multistep">
+    <input type="hidden" data-tag-part="basetype" value="multistep">
+    <fieldset>
+        <legend id="<?php echo esc_attr( $args['content'] . '-name-legend' ); ?>">Field name</legend>
+        <input type="text" data-tag-part="name" pattern="[A-Za-z][A-Za-z0-9_\-]*" aria-labelledby="<?php echo esc_attr( $args['content'] . '-name-legend' ); ?>">
+    </fieldset>
+    <fieldset>
+        <legend id="<?php echo esc_attr( $args['content'] . '-next_url' ); ?>"><?php echo esc_html( __( 'Next Page URL', 'contact-form-7-multi-step-module' ) ); ?></legend>
+        <input type="text" data-tag-part="value" aria-labelledby="<?php echo esc_attr( $args['content'] . '-next_url' ); ?>">
+        <p style="margin-bottom:0;">
+            <?php echo esc_html( __( 'The URL of the page that contains the next form.', 'contact-form-7-multi-step-module' ) ) ?><br>
+            <?php echo esc_html( __( 'This can be blank on the last step.', 'contact-form-7-multi-step-module' ) ); ?>
+        </p>
+    </fieldset>
+    <fieldset>
+        <legend id="<?php echo esc_attr( $args['content'] . '-first_step' ); ?>"><?php echo esc_html( __( 'First Step', 'contact-form-7-multi-step-module' ) ); ?></legend>
+        <label for="cf7msm-first_step">
+            <input type="checkbox" data-tag-part="option" data-tag-option="first_step" name="first_step" class="option" id="cf7msm-first_step" /> <span class="description"><?php echo esc_html( __( 'Check this if this form is the first step.' ) ) ?></span>
+        </label>
+    </fieldset>
+    <fieldset>
+        <legend id="<?php echo esc_attr( $args['content'] . '-last_step' ); ?>"><?php echo esc_html( __( 'Last Step', 'contact-form-7-multi-step-module' ) ); ?></legend>
+        <label for="cf7msm-last_step">
+            <input type="checkbox" data-tag-part="option" data-tag-option="last_step" id="cf7msm-last_step" /> <span class="description"><?php echo esc_html( __( 'Check this if this form is the last step.' ) ) ?></span>
+        </label>
+    </fieldset>
+    <fieldset>
+        <legend id="<?php echo esc_attr( $args['content'] . '-send_email' ); ?>"><?php echo esc_html( __( 'Send Email', 'contact-form-7-multi-step-module' ) ); ?></legend>
+        <label for="cf7msm-send_email">
+            <input type="checkbox" data-tag-part="option" data-tag-option="send_email" id="cf7msm-send_email" /> <span class="description"><?php echo esc_html( __( 'Send email after this form submits.' ) ) ?></span>
+        </label>
+    </fieldset>
+    <fieldset>
+        <legend id="<?php echo esc_attr( $args['content'] . '-skip_save' ); ?>"><?php echo esc_html( __( 'Skip Save', 'contact-form-7-multi-step-module' ) ); ?></legend>
+        <label for="cf7msm-skip_save">
+            <input type="checkbox" data-tag-part="option" data-tag-option="skip_save" name="skip_save" class="option" id="cf7msm-skip_save" /> &nbsp;<span class="description"><?php echo esc_html( __( 'Don\'t save this form to the database (for Flamingo and CFDB7).' ) ) ?></span>
+        </label>
+    </fieldset>
+    <div class="cf7msm-faq" style="text-align:center;display:none;">
+        <?php if ( cf7msm_fs()->is_not_paying() ) : ?>
+            <hr>
+        <?php printf( cf7msm_kses( __( '<p><strong>Upgrade to Pro and avoid browser limitations that can cause loss of data.</strong><br><button class="cf7msm-freemius-purchase">Upgrade Now</button><br><a href="%s" target="_blank">See here for more information.</a></p>', 'contact-form-7-multi-step-module' ) ), CF7MSM_LEARN_MORE_URL ); ?>
+        <?php endif; ?>
+    </div>
+</div>
+<footer class="insert-box">
+    <div class="flex-container">
+        <input type="text" class="code" readonly="readonly" onfocus="this.select();" data-tag-part="tag" aria-label="The form-tag to be inserted into the form template">
+        <button type="button" class="button button-primary" data-taggen="insert-tag"><?php echo esc_html( __( 'Insert Tag', 'contact-form-7-multi-step-module' ) ); ?></button>
+        
+    </div>
+    <p class="description mail-tag-tip"><label><?php echo esc_html( __( "This field should not be used on the Mail tab.", 'contact-form-7-multi-step-module' ) ); ?></label>
+    </p>
+    <?php cf7msm_form_tag_footer_text();?>
+</footer>
+<?php
+}
+
+
+/**
+ * Error messages if first step is not set and user did not already visit the first step.
+ */
+function cf7msm_multistep_messages( $messages ) {
+    $messages = array_merge( $messages, array(
+        'invalid_first_step' => array(
+            'description' =>
+                __( "The sender visited this form without submitting the first step of the multistep forms.", 'contact-form-7-multi-step-module' ),
+            'default' =>
+                __( "Please fill out the form on the previous page.", 'contact-form-7-multi-step-module' ),
+        ),
+    ) );
+
+    return $messages;
+}
+add_filter( 'wpcf7_messages', 'cf7msm_multistep_messages' );
+
+/**
+ * Return the step value and next url in an array.  URL may be empty.
+ */
+function cf7msm_format_multistep_value( $valueString ) {
+    $no_url = false;
+    $next_url = '';
+
+    $i = stripos( $valueString, '-' );
+    $curr_step = substr( $valueString, 0, $i );
+    $j = stripos( $valueString, '-', $i+1 );
+    if ( $j === FALSE ) {
+        $j = strlen( $valueString );
+        $no_url = true;
+    }
+    $total_steps = substr( $valueString, $i+1, $j-($i+1) );
+    if ( !$no_url ) {
+        $next_url = substr( $valueString, $j+1 );
+    }
+
+    return array(
+        'curr_step'   => $curr_step,
+        'total_steps' => $total_steps,
+        'next_url'    => $next_url
+    );
+}
+
+
+
+/**
+ * Pre CF7 6.0 tag generator
+ */
+function cf7msm_multistep_tag_generator_old( $contact_form, $args = '' ) {
 
     $args = wp_parse_args( $args, array() );
 ?>
@@ -147,9 +269,9 @@ function cf7msm_multistep_tag_generator( $contact_form, $args = '' ) {
                     </td>
                 </tr>
                 <tr>
-                    <th scope="row"><label for="last_step"><?php echo esc_html( __( 'Last Step', 'contact-form-7-multi-step-module' ) ); ?></label>
+                    <th scope="row"><label for="cf7msm-last_step"><?php echo esc_html( __( 'Last Step', 'contact-form-7-multi-step-module' ) ); ?></label>
                     </th>
-                    <td><input type="checkbox" name="last_step" class="option" id="last_step" /> &nbsp;
+                    <td><input type="checkbox" name="last_step" class="option" id="cf7msm-last_step" /> &nbsp;
                         <label for="last_step"><span class="description"><?php echo esc_html( __( 'Check this if this form is the last step.' ) ) ?></span></label>
                     </td>
                 </tr>
@@ -206,48 +328,4 @@ function cf7msm_multistep_tag_generator( $contact_form, $args = '' ) {
         <?php cf7msm_form_tag_footer_text();?>
     </div>
 <?php
-}
-
-
-/**
- * Error messages if first step is not set and user did not already visit the first step.
- */
-function cf7msm_multistep_messages( $messages ) {
-    $messages = array_merge( $messages, array(
-        'invalid_first_step' => array(
-            'description' =>
-                __( "The sender visited this form without submitting the first step of the multistep forms.", 'contact-form-7-multi-step-module' ),
-            'default' =>
-                __( "Please fill out the form on the previous page.", 'contact-form-7-multi-step-module' ),
-        ),
-    ) );
-
-    return $messages;
-}
-add_filter( 'wpcf7_messages', 'cf7msm_multistep_messages' );
-
-/**
- * Return the step value and next url in an array.  URL may be empty.
- */
-function cf7msm_format_multistep_value( $valueString ) {
-    $no_url = false;
-    $next_url = '';
-
-    $i = stripos( $valueString, '-' );
-    $curr_step = substr( $valueString, 0, $i );
-    $j = stripos( $valueString, '-', $i+1 );
-    if ( $j === FALSE ) {
-        $j = strlen( $valueString );
-        $no_url = true;
-    }
-    $total_steps = substr( $valueString, $i+1, $j-($i+1) );
-    if ( !$no_url ) {
-        $next_url = substr( $valueString, $j+1 );
-    }
-
-    return array(
-        'curr_step'   => $curr_step,
-        'total_steps' => $total_steps,
-        'next_url'    => $next_url
-    );
 }

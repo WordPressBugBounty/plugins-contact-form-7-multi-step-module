@@ -109,7 +109,15 @@ function cf7msm_multiform_shortcode_handler(  $tag  ) {
 function cf7msm_add_tag_generator_form_field() {
     if ( class_exists( 'WPCF7_TagGenerator' ) ) {
         $tag_generator = WPCF7_TagGenerator::get_instance();
-        $tag_generator->add( 'form-field', esc_html( __( 'multiform', 'contact-form-7-multi-step-module' ) ), 'cf7msm_form_field_tag_pane' );
+        $generator_callback = ( cf7msm_is_tg_v2() ? 'cf7msm_form_field_tag_pane' : 'cf7msm_form_field_tag_pane_old' );
+        $tag_generator->add(
+            'form-field',
+            __( 'multiform', 'contact-form-7-multi-step-module' ),
+            $generator_callback,
+            array(
+                'version' => '2',
+            )
+        );
     } else {
         if ( function_exists( 'wpcf7_add_tag_generator' ) ) {
             wpcf7_add_tag_generator( 'form', esc_html( __( 'Form value', 'contact-form-7-multi-step-module' ), 'wpcf7-tg-pane-form', 'wpcf7_tg_pane_form' ) );
@@ -122,6 +130,56 @@ add_action( 'admin_init', 'cf7msm_add_tag_generator_form_field', 30 );
  * Form tag pane.
  */
 function cf7msm_form_field_tag_pane(  $contact_form, $args = ''  ) {
+    $args = wp_parse_args( $args, array() );
+    ?>
+<header class="description-box">
+	<h3>Multi Step form-tag generator</h3>
+
+	<p><?php 
+    cf7msm_form_tag_header_text( 'Generate a form-tag to show a field from a previous form in a multistep form' );
+    ?></p>
+</header>
+<div class="control-box cf7msm-multistep">
+    <input type="hidden" data-tag-part="basetype" value="multiform">
+    <fieldset>
+        <legend id="<?php 
+    echo esc_attr( $args['content'] . '-name-legend' );
+    ?>"><?php 
+    echo esc_html( __( 'Name of Field to Show', 'contact-form-7-multi-step-module' ) );
+    ?></legend>
+        <input type="text" data-tag-part="name" pattern="[A-Za-z][A-Za-z0-9_\-]*" aria-labelledby="<?php 
+    echo esc_attr( $args['content'] . '-name-legend' );
+    ?>" id="cf7msm-multiform-name" value=" ">
+        <p style="margin-bottom:0;">
+            <?php 
+    echo esc_html( __( 'The name of the field from a form in a previous step', 'contact-form-7-multi-step-module' ) );
+    ?>
+        </p>
+    </fieldset>
+</div>
+<footer class="insert-box">
+    <div class="flex-container">
+        <input type="text" class="code" readonly="readonly" onfocus="this.select();" data-tag-part="tag" aria-label="The form-tag to be inserted into the form template">
+        <button type="button" class="button button-primary" data-taggen="insert-tag"><?php 
+    echo esc_html( __( 'Insert Tag', 'contact-form-7-multi-step-module' ) );
+    ?></button>
+        
+    </div>
+    <p class="description mail-tag-tip"><label><?php 
+    echo esc_html( __( "This field should not be used on the Mail tab.", 'contact-form-7-multi-step-module' ) );
+    ?></label>
+    </p>
+    <?php 
+    cf7msm_form_tag_footer_text();
+    ?>
+</footer>
+<?php 
+}
+
+/**
+ * Pre CF7 6.0 way to generate tag
+ */
+function cf7msm_form_field_tag_pane_old(  $contact_form, $args = ''  ) {
     $args = wp_parse_args( $args, array() );
     ?>
 <div class="control-box cf7msm-multistep">

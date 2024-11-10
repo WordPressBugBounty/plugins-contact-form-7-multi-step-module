@@ -12,6 +12,11 @@ import '../scss/cf7msm-admin.scss';
     });
     
     $('.cf7msm-freemius-purchase').on('click', function (e) {
+        let panel_el = $('#tag-generator-panel-multistep[open]');
+        if (panel_el.length > 0) {
+            $('.close-button', panel_el).trigger('click');
+        }
+
         handler.open({
             name     : 'Contact Form 7 Multi-Step Forms',
             licenses : 1,

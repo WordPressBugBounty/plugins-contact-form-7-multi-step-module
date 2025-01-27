@@ -3,7 +3,7 @@ Contributors: webheadllc
 Tags: contact form 7, multistep form, form, multiple pages, contact
 Requires at least: 4.7
 Tested up to: 6.6
-Stable tag: 4.4.1
+Stable tag: 4.4.2
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -135,6 +135,9 @@ Make sure to check the "Skip Save" checkbox or have the skip_save attribute in t
 When checkboxes are not checked they aren't submitted through the form so the last step of the form doesn't know the unchecked checkbox field exists.  To get around this issue add a hidden form tag like `[hidden field-name]` to the last step.  This way the last step will either submit the previously set value or a blank value.
 
 == Changelog ==
+
+= 4.4.2 =
+* updated Freemius.  
 
 = 4.4.1 =
 * fixed error when cookie has an array in it.  

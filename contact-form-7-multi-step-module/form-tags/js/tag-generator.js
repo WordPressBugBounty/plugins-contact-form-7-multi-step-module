@@ -20,6 +20,8 @@
     $('form.tag-generator-panel .cf7msm-multistep #cf7msm-last_step').change(function() {
         if ($(this).is(":checked")) {
             $('input[name="send_email"]', $(this.form)).prop('checked', true);
+            $('#cf7msm-send_email', $(this.form)).prop('checked', true);
+            
             $(".cf7msm-faq", $(this.form)).fadeIn();
         }
     });

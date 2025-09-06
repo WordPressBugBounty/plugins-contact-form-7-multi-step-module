@@ -1,10 +1,24 @@
 import '../scss/cf7msm.scss';
 
 var cf7msm_ss;
+var cf7msm_did_load = false;
 
 (function( $ ) {
 	// load on DOMContentLoaded bc wpc7 loads here.
-	document.addEventListener( 'DOMContentLoaded', event => {
+	window.addEventListener( 'DOMContentLoaded', e => {
+		cf7msm_init();
+	});
+	window.addEventListener('pagehide', e => {
+		cf7msm_did_load = false;
+	})
+	window.addEventListener( 'pageshow', e => {
+		cf7msm_init(e.persisted);
+	});
+	function cf7msm_init(is_bfcache) {
+		if (cf7msm_did_load) {
+			return;
+		}
+		cf7msm_did_load = true;
 		var posted_data = cf7msm_posted_data;
 		var cf7msm_field = $("input[name='_cf7msm_multistep_tag']");
 		var hasMultistepOptions = cf7msm_field.length > 0;
@@ -178,6 +192,9 @@ var cf7msm_ss;
 			
 			cf7msmSetOptions( form );
 			cf7msmSetFreeText( form );
+		}
+		if (is_bfcache) {
+			cf7msm();
 		}
 		
 		function cf7msmSetOptions( cf7_form_arg ) {
@@ -389,7 +406,7 @@ var cf7msm_ss;
 				if (nextUrl && nextUrl != '') {
 					var parser = document.createElement('a');
 					parser.href = nextUrl;
-					var nextUrlHostName = parser.hostname ? parser.hostname : '';
+					var nextUrlHostName = parser.hostname + (parser.port ? ':' + parser.port : '');
 
 					var steps_prev_urls = {};
 					if ( cf7msm_ss && cf7msm_ss.cf7msm_prev_urls ) {
@@ -425,7 +442,7 @@ var cf7msm_ss;
 				*/
 			}
 		}, false );
-	});
+	};
 })(jQuery);
 
 

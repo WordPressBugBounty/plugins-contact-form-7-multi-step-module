@@ -3,6 +3,79 @@ import '../scss/cf7msm.scss';
 (function( $ ) {
 	var cf7msm_ss;
 	var cf7msm_did_load = false;
+	/**
+	 * Given 2 arrays, return a unique array
+	 * https://codegolf.stackexchange.com/questions/17127/array-merge-without-duplicates
+	 */
+	function cf7msm_uniqueArray(i,x) {
+		var h = {};
+		var n = [];
+		for (var a = 2; a--; i=x)
+		   i.map(function(b){
+			 h[b] = h[b] || n.push(b);
+		   });
+		return n
+	 }
+	 
+	 /**
+	  * check if local storage is usable.
+	  */
+	 function cf7msm_hasSS() {
+		 var test = 'test';
+		 try {
+			 sessionStorage.setItem(test, test);
+			 sessionStorage.removeItem(test);
+			 return true;
+		 } catch(e) {
+			 return false;
+		 }
+	 }
+	 function cf7msm_setStorageObject(storage, key, value) {
+		 storage.setItem(key, JSON.stringify(value));
+	 }
+	 
+	 function cf7msm_getStorageObject(storage, key) {
+		 var value = storage.getItem(key);
+		 return value && JSON.parse(value);
+	 }
+	 
+	 /**
+	  * Escape values when inserting into HTML attributes
+	  * From SO: https://stackoverflow.com/questions/7753448/how-do-i-escape-quotes-in-html-attribute-values
+	  */
+	 function quoteattr(s, preserveCR) {
+		 preserveCR = preserveCR ? '&#13;' : '\n';
+		 return ('' + s) /* Forces the conversion to string. */
+			 .replace(/&/g, '&amp;') /* This MUST be the 1st replacement. */
+			 .replace(/'/g, '&apos;') /* The 4 other predefined entities, required. */
+			 .replace(/"/g, '&quot;')
+			 .replace(/</g, '&lt;')
+			 .replace(/>/g, '&gt;')
+			 /*
+			 You may add other replacements here for HTML only 
+			 (but it's not necessary).
+			 Or for XML, only if the named entities are defined in its DTD.
+			 */ 
+			 .replace(/\r\n/g, preserveCR) /* Must be before the next replacement. */
+			 .replace(/[\r\n]/g, preserveCR);
+	 }
+	 /**
+	  * Escape values when using in javascript first.
+	  * From SO: https://stackoverflow.com/questions/7753448/how-do-i-escape-quotes-in-html-attribute-values
+	  */
+	 function escapeattr(s) {
+		 return ('' + s) /* Forces the conversion to string. */
+			 .replace(/\\/g, '\\\\') /* This MUST be the 1st replacement. */
+			 .replace(/\t/g, '\\t') /* These 2 replacements protect whitespaces. */
+			 .replace(/\n/g, '\\n')
+			 .replace(/\u00A0/g, '\\u00A0') /* Useful but not absolutely necessary. */
+			 .replace(/&/g, '\\x26') /* These 5 replacements protect from HTML/XML. */
+			 .replace(/'/g, '\\x27')
+			 .replace(/"/g, '\\x22')
+			 .replace(/</g, '\\x3C')
+			 .replace(/>/g, '\\x3E')
+			 ;
+	 }
 	
 	// load on DOMContentLoaded bc wpc7 loads here.
 	window.addEventListener( 'DOMContentLoaded', e => {
@@ -35,7 +108,7 @@ import '../scss/cf7msm.scss';
 		var form_id = cf7msm_form.find('input[name="_wpcf7"]').val();
 		
 		if ( cf7msm_hasSS() ) {
-			cf7msm_ss = sessionStorage.getObject( 'cf7msm' );
+			cf7msm_ss = cf7msm_getStorageObject( sessionStorage, 'cf7msm' );
 			/*
 			//multi step forms
 			if (cf7msm_ss != null && step_field.length > 0) {
@@ -287,7 +360,7 @@ import '../scss/cf7msm.scss';
 				var totalSteps = 0;
 				var names = [];
 				var currentInputs = {};
-				cf7msm_ss = sessionStorage.getObject('cf7msm');
+				cf7msm_ss = cf7msm_getStorageObject(sessionStorage, 'cf7msm');
 				if ( !cf7msm_ss ) {
 					cf7msm_ss = {};
 				}
@@ -299,6 +372,8 @@ import '../scss/cf7msm.scss';
 				var last_step = false;
 				
 				var free_text_els = $('.has-free-text', form);
+				var checkbox_free_text_map = {}; // Track which checkbox fields have free text
+
 				$.each(e.detail.inputs, function(i){
 					var name = e.detail.inputs[i].name;
 					var value = e.detail.inputs[i].value;
@@ -314,10 +389,23 @@ import '../scss/cf7msm.scss';
 								base_name = name.substring(0, name.length - 2);
 							}
 							var ref_len = value.length;
-							// append free text value
-							value += ' ' + $('input[name="_wpcf7_free_text_' + base_name + '"]', free_text_els).val();
+							var free_text_value = $('input[name="_wpcf7_free_text_' + base_name + '"]', free_text_els).val();
 							var ref_name = '_cf7msm_free_text_reflen_' + base_name;
-							currentInputs[ref_name] = ref_len;
+
+							// Store free text info for checkboxes to append later
+							if ( name.indexOf('[]') === name.length - 2 ) {
+								checkbox_free_text_map[name] = {
+									value: value,
+									free_text: free_text_value,
+									ref_len: ref_len,
+									ref_name: ref_name
+								};
+							}
+							else {
+								// For radio buttons, append immediately
+								value += ' ' + free_text_value;
+								currentInputs[ref_name] = ref_len;
+							}
 						}
 					}
 
@@ -372,6 +460,19 @@ import '../scss/cf7msm.scss';
 						names.push(name);
 					}
 				});
+
+				// Now append free text to the last checkbox value only
+				$.each(checkbox_free_text_map, function(name, info) {
+					if (currentInputs.hasOwnProperty(name) && currentInputs[name].length > 0) {
+						var last_index = currentInputs[name].length - 1;
+						// Only append if the last value matches the one with free text
+						if (currentInputs[name][last_index] === info.value) {
+							currentInputs[name][last_index] += ' ' + info.free_text;
+							currentInputs[info.ref_name] = info.ref_len;
+						}
+					}
+				});
+
 				if (!isCF7MSM) {
 					return;
 				}
@@ -427,7 +528,7 @@ import '../scss/cf7msm.scss';
 					cf7msm_ss.cf7msm_prev_urls = steps_prev_urls;
 				}
 
-				sessionStorage.setObject('cf7msm', cf7msm_ss);
+				cf7msm_setStorageObject(sessionStorage, 'cf7msm', cf7msm_ss);
 
 				if (nextUrl && nextUrl != '') {
 					window.location.href = nextUrl;
@@ -438,84 +539,9 @@ import '../scss/cf7msm.scss';
 				if ( currStep != 0 && currStep === totalSteps ) {
 					cf7msm_ss = {};
 				}
-				sessionStorage.setObject('cf7msm', cf7msm_ss);
+				cf7msm_setStorageObject(sessionStorage, 'cf7msm', cf7msm_ss);
 				*/
 			}
 		}, false );
 	};
 })(jQuery);
-
-
-/**
- * Given 2 arrays, return a unique array
- * https://codegolf.stackexchange.com/questions/17127/array-merge-without-duplicates
- */
-function cf7msm_uniqueArray(i,x) {
-	var h = {};
-	var n = [];
-	for (var a = 2; a--; i=x)
-	   i.map(function(b){
-		 h[b] = h[b] || n.push(b);
-	   });
-	return n
- }
- 
- /**
-  * check if local storage is usable.
-  */
- function cf7msm_hasSS() {
-	 var test = 'test';
-	 try {
-		 sessionStorage.setItem(test, test);
-		 sessionStorage.removeItem(test);
-		 return true;
-	 } catch(e) {
-		 return false;
-	 }
- }
- Storage.prototype.setObject = function(key, value) {
-	 this.setItem(key, JSON.stringify(value));
- }
- 
- Storage.prototype.getObject = function(key) {
-	 var value = this.getItem(key);
-	 return value && JSON.parse(value);
- }
- 
- /**
-  * Escape values when inserting into HTML attributes
-  * From SO: https://stackoverflow.com/questions/7753448/how-do-i-escape-quotes-in-html-attribute-values
-  */
- function quoteattr(s, preserveCR) {
-	 preserveCR = preserveCR ? '&#13;' : '\n';
-	 return ('' + s) /* Forces the conversion to string. */
-		 .replace(/&/g, '&amp;') /* This MUST be the 1st replacement. */
-		 .replace(/'/g, '&apos;') /* The 4 other predefined entities, required. */
-		 .replace(/"/g, '&quot;')
-		 .replace(/</g, '&lt;')
-		 .replace(/>/g, '&gt;')
-		 /*
-		 You may add other replacements here for HTML only 
-		 (but it's not necessary).
-		 Or for XML, only if the named entities are defined in its DTD.
-		 */ 
-		 .replace(/\r\n/g, preserveCR) /* Must be before the next replacement. */
-		 .replace(/[\r\n]/g, preserveCR);
- }
- /**
-  * Escape values when using in javascript first.
-  * From SO: https://stackoverflow.com/questions/7753448/how-do-i-escape-quotes-in-html-attribute-values
-  */
- function escapeattr(s) {
-	 return ('' + s) /* Forces the conversion to string. */
-		 .replace(/\\/g, '\\\\') /* This MUST be the 1st replacement. */
-		 .replace(/\t/g, '\\t') /* These 2 replacements protect whitespaces. */
-		 .replace(/\n/g, '\\n')
-		 .replace(/\u00A0/g, '\\u00A0') /* Useful but not absolutely necessary. */
-		 .replace(/&/g, '\\x26') /* These 5 replacements protect from HTML/XML. */
-		 .replace(/'/g, '\\x27')
-		 .replace(/"/g, '\\x22')
-		 .replace(/</g, '\\x3C')
-		 .replace(/>/g, '\\x3E')
-		 ;
- }

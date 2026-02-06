@@ -4,9 +4,10 @@
 Plugin Name: Contact Form 7 Multi-Step Forms
 Plugin URI: http://www.mymonkeydo.com/contact-form-7-multi-step-module/
 Description: Enables the Contact Form 7 plugin to create multi-page, multi-step forms.
+Requires Plugins:  contact-form-7
 Author: Webhead LLC.
 Author URI: http://webheadcoder.com
-Version: 4.4.4
+Version: 4.5
 Text Domain: contact-form-7-multi-step-module
 */
 /*  Copyright 2025 Webhead LLC (email: info at webheadcoder.com)
@@ -63,7 +64,7 @@ if ( function_exists( 'cf7msm_fs' ) ) {
         cf7msm_fs();
         // Signal that SDK was initiated.
         do_action( 'cf7msm_fs_loaded' );
-        define( 'CF7MSM_VERSION', '4.4.4' );
+        define( 'CF7MSM_VERSION', '4.5' );
         define( 'CF7MSM_PLUGIN', __FILE__ );
         define( 'CF7MSM_FREE_TEXT_PREFIX_RADIO', '_wpcf7_free_text_' );
         define( 'CF7MSM_FREE_TEXT_PREFIX_CHECKBOX', '_wpcf7_free_text_' );

@@ -92,6 +92,7 @@ import '../scss/cf7msm.scss';
 			return;
 		}
 		cf7msm_did_load = true;
+		var pipe_flow_field_name = 'wpcf7msm_pipe_flow_id';
 		var posted_data = cf7msm_posted_data;
 		var cf7msm_field = $("input[name='_cf7msm_multistep_tag']");
 		var hasMultistepOptions = cf7msm_field.length > 0;
@@ -106,6 +107,92 @@ import '../scss/cf7msm.scss';
 		}
 		var cf7msm_form = cf7msm_field.closest('form');
 		var form_id = cf7msm_form.find('input[name="_wpcf7"]').val();
+
+		function cf7msmGeneratePipeFlowId() {
+			if (window.crypto && window.crypto.getRandomValues) {
+				var bytes = new Uint8Array(16);
+				window.crypto.getRandomValues(bytes);
+				var hex = '';
+				for (var i = 0; i < bytes.length; i++) {
+					var hexByte = bytes[i].toString(16);
+					hex += hexByte.length < 2 ? '0' + hexByte : hexByte;
+				}
+				return hex;
+			}
+			return String(Date.now()) + Math.random().toString(36).substring(2, 14);
+		}
+
+		function cf7msmGetVisibleMultistepTagFields(form) {
+			var optionsField = form.find("input[name='_cf7msm_multistep_tag']");
+			
+			return optionsField;
+		}
+
+		function cf7msmIsMultistepForm(form) {
+			return form.find("input[name='_cf7msm_multistep_tag']").length > 0 || form.find("input[name='cf7msm-step']").length > 0;
+		}
+
+		function cf7msmIsFirstStep(form) {
+			var optionsField = cf7msmGetVisibleMultistepTagFields(form);
+			if (optionsField.length > 0) {
+				try {
+					var options = JSON.parse(optionsField.last().val());
+					return !!(options && options.first_step);
+				}
+				catch (e) {
+					return false;
+				}
+			}
+
+			var stepField = form.find("input[name='cf7msm-step']");
+			if (stepField.length > 0) {
+				return /^1-\d+$/.test(stepField.last().val());
+			}
+
+			return false;
+		}
+
+		function cf7msmGetPipeFlowId(form) {
+			var flowField = form.find('input[name="' + pipe_flow_field_name + '"]');
+			if (flowField.length > 0 && flowField.last().val()) {
+				return flowField.last().val();
+			}
+			if (posted_data && typeof posted_data === 'object' && posted_data.hasOwnProperty(pipe_flow_field_name) && posted_data[pipe_flow_field_name]) {
+				return posted_data[pipe_flow_field_name];
+			}
+			if (cf7msm_ss && typeof cf7msm_ss === 'object' && cf7msm_ss.hasOwnProperty(pipe_flow_field_name) && cf7msm_ss[pipe_flow_field_name]) {
+				return cf7msm_ss[pipe_flow_field_name];
+			}
+			return cf7msmGeneratePipeFlowId();
+		}
+
+		function cf7msmSetPipeFlow( cf7_form_arg ) {
+			var form = cf7_form_arg;
+			if ( ! ( form instanceof jQuery ) ) {
+				form = $(cf7_form_arg);
+			}
+			if ( form.length === 0 ) {
+				return;
+			}
+			if ( !cf7msmIsMultistepForm(form) ) {
+				return;
+			}
+
+			var flow_id = cf7msmIsFirstStep(form) ? cf7msmGeneratePipeFlowId() : cf7msmGetPipeFlowId(form);
+			form.find('input[name="' + pipe_flow_field_name + '"]').remove();
+			$('<input />', {
+				'type': 'hidden',
+				'name': pipe_flow_field_name,
+				'value': flow_id
+			}).appendTo(form);
+
+			if (posted_data && typeof posted_data === 'object') {
+				posted_data[pipe_flow_field_name] = flow_id;
+			}
+			if (cf7msm_ss && typeof cf7msm_ss === 'object') {
+				cf7msm_ss[pipe_flow_field_name] = flow_id;
+			}
+		}
 		
 		if ( cf7msm_hasSS() ) {
 			cf7msm_ss = cf7msm_getStorageObject( sessionStorage, 'cf7msm' );
@@ -201,8 +288,12 @@ import '../scss/cf7msm.scss';
 									}).prop('checked', false).trigger('click', [{cf7msm: true}]);
 							}
 							else if ( field.is('select') ) {
+								var select_val = val;
+								if (select_val && select_val.constructor === Array) {
+									select_val = select_val.length > 0 ? select_val[0] : '';
+								}
 								field.find('option').filter(function() {
-									return this.value == val;
+									return this.value == select_val;
 								}).prop('selected', true);
 							}
 							else {
@@ -235,8 +326,12 @@ import '../scss/cf7msm.scss';
 						}
 	
 						else if ( multiselect_field.length > 0 && val.constructor === Array ) {
-							if ( val != '' && val.length > 0  ) {
-								$.each(val, function(i, v){
+							var select_vals = val;
+							if (select_vals && select_vals.constructor !== Array) {
+								select_vals = [select_vals];
+							}
+							if ( select_vals != '' && select_vals.length > 0  ) {
+								$.each(select_vals, function(i, v){
 									multiselect_field.find('option').filter(function(){
 										return this.value == v;
 									}).prop('selected', true);
@@ -264,6 +359,7 @@ import '../scss/cf7msm.scss';
 		function cf7msmBeforeSubmit( form ) {
 			
 			cf7msmSetOptions( form );
+			cf7msmSetPipeFlow( form );
 			cf7msmSetFreeText( form );
 		}
 		if (is_bfcache) {
@@ -276,8 +372,7 @@ import '../scss/cf7msm.scss';
 				form = $(cf7_form_arg);
 			}
 
-			var cf7msm_option = form.find("input[name='_cf7msm_multistep_tag']");
-			
+			var cf7msm_option = cf7msmGetVisibleMultistepTagFields(form);
 			if ( cf7msm_option.length == 0) {
 				return;
 			}

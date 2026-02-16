@@ -110,6 +110,31 @@ function cf7msm_init_sessions() {
 
 add_action( 'init', 'cf7msm_init_sessions' );
 /**
+ * Check for user-specific multi-step state cookies.
+ */
+function cf7msm_has_state_cookies() {
+    $cookie_names = array(
+        'cf7msm_posted_data',
+        'cf7msm-step',
+        'cf7msm_prev_urls',
+        'cf7msm-first-step',
+        'cf7msm_big_cookie',
+        'cf7msm_check'
+    );
+    foreach ( $cookie_names as $cookie_name ) {
+        if ( isset( $_COOKIE[$cookie_name] ) ) {
+            return true;
+        }
+    }
+    $force_session = apply_filters( 'cf7msm_force_session', false );
+    $allow_session = apply_filters( 'cf7msm_allow_session', $force_session );
+    if ( $allow_session && isset( $_COOKIE['PHPSESSID'] ) ) {
+        return true;
+    }
+    return false;
+}
+
+/**
  * Add scripts
  */
 function cf7msm_scripts() {
@@ -126,7 +151,7 @@ function cf7msm_scripts() {
         CF7MSM_VERSION,
         true
     );
-    $cf7msm_posted_data = cf7msm_get( 'cf7msm_posted_data' );
+    $cf7msm_posted_data = cf7msm_get( 'cf7msm_posted_data', [] );
     if ( empty( $cf7msm_posted_data ) ) {
         $cf7msm_posted_data = array();
     }
@@ -172,7 +197,9 @@ function cf7msm_get(  $var_name, $default = ''  ) {
         $ret = ( isset( $_SESSION[$var_name] ) ? cf7msm_sanitize_posted_data( $_SESSION[$var_name] ) : $default );
     } else {
         $ret = ( isset( $_COOKIE[$var_name] ) ? cf7msm_sanitize_posted_data( $_COOKIE[$var_name] ) : $default );
-        $ret = json_decode( wp_unslash( $ret ), true );
+        if ( is_string( $ret ) ) {
+            $ret = json_decode( wp_unslash( $ret ), true );
+        }
     }
     // Conditional Fields plugin throws 500 error when these aren't set.
     if ( $var_name == 'cf7msm_posted_data' && class_exists( 'CF7CF' ) && method_exists( 'CF7CF', 'cf7msm_merge_post_with_cookie' ) ) {
@@ -211,6 +238,461 @@ function cf7msm_remove(  $var_name  ) {
             );
         }
     }
+}
+
+/**
+ * Return true when a form-tag pipes object has mapped values.
+ */
+function cf7msm_has_pipes(  $pipes  ) {
+    if ( empty( $pipes ) ) {
+        return false;
+    }
+    if ( is_object( $pipes ) && method_exists( $pipes, 'zero' ) ) {
+        return !$pipes->zero();
+    }
+    if ( is_object( $pipes ) && method_exists( $pipes, 'to_array' ) ) {
+        $pipe_values = $pipes->to_array();
+        return !empty( $pipe_values );
+    }
+    if ( is_array( $pipes ) ) {
+        return !empty( $pipes );
+    }
+    return false;
+}
+
+/**
+ * Return pipe-enabled selectable field metadata on the current form.
+ */
+function cf7msm_get_pipe_form_tags(  $wpcf7 = null  ) {
+    if ( empty( $wpcf7 ) && class_exists( 'WPCF7_ContactForm' ) ) {
+        $wpcf7 = WPCF7_ContactForm::get_current();
+    }
+    if ( empty( $wpcf7 ) || !method_exists( $wpcf7, 'scan_form_tags' ) ) {
+        return array();
+    }
+    $form_tags = $wpcf7->scan_form_tags();
+    if ( empty( $form_tags ) || !is_array( $form_tags ) ) {
+        return array();
+    }
+    $pipe_form_tags = array();
+    foreach ( $form_tags as $form_tag ) {
+        $field_name = '';
+        $field_type = '';
+        $pipes = null;
+        $has_free_text = false;
+        if ( is_object( $form_tag ) ) {
+            if ( !empty( $form_tag->name ) ) {
+                $field_name = $form_tag->name;
+            }
+            if ( !empty( $form_tag->basetype ) ) {
+                $field_type = $form_tag->basetype;
+            } else {
+                if ( !empty( $form_tag->type ) ) {
+                    $field_type = rtrim( $form_tag->type, '*' );
+                }
+            }
+            if ( isset( $form_tag->pipes ) ) {
+                $pipes = $form_tag->pipes;
+            }
+            if ( method_exists( $form_tag, 'has_option' ) ) {
+                $has_free_text = $form_tag->has_option( 'free_text' );
+            } else {
+                if ( !empty( $form_tag->options ) && is_array( $form_tag->options ) ) {
+                    $has_free_text = in_array( 'free_text', $form_tag->options, true );
+                }
+            }
+        } else {
+            if ( is_array( $form_tag ) ) {
+                $field_name = ( !empty( $form_tag['name'] ) ? $form_tag['name'] : '' );
+                if ( !empty( $form_tag['basetype'] ) ) {
+                    $field_type = $form_tag['basetype'];
+                } else {
+                    if ( !empty( $form_tag['type'] ) ) {
+                        $field_type = rtrim( $form_tag['type'], '*' );
+                    }
+                }
+                if ( isset( $form_tag['pipes'] ) ) {
+                    $pipes = $form_tag['pipes'];
+                }
+                if ( !empty( $form_tag['options'] ) && is_array( $form_tag['options'] ) ) {
+                    $has_free_text = in_array( 'free_text', $form_tag['options'], true );
+                }
+            }
+        }
+        if ( empty( $field_name ) || !in_array( $field_type, array('select', 'radio', 'checkbox'), true ) || !cf7msm_has_pipes( $pipes ) ) {
+            continue;
+        }
+        $pipe_form_tags[$field_name] = array(
+            'type'          => $field_type,
+            'pipes'         => $pipes,
+            'has_free_text' => $has_free_text,
+        );
+    }
+    return $pipe_form_tags;
+}
+
+/**
+ * Get raw request values for a field key and its array variant.
+ */
+function cf7msm_get_request_value_for_field(  $field_name, &$has_value  ) {
+    $has_value = false;
+    if ( isset( $_POST[$field_name] ) ) {
+        $has_value = true;
+        return cf7msm_sanitize_posted_data( wp_unslash( $_POST[$field_name] ) );
+    }
+    $array_field_name = $field_name . '[]';
+    if ( isset( $_POST[$array_field_name] ) ) {
+        $has_value = true;
+        return cf7msm_sanitize_posted_data( wp_unslash( $_POST[$array_field_name] ) );
+    }
+    return '';
+}
+
+/**
+ * Get transformed posted-data values for a field key and its array variant.
+ */
+function cf7msm_get_posted_value_for_field(  $posted_data, $field_name, &$has_value  ) {
+    $has_value = false;
+    if ( !is_array( $posted_data ) ) {
+        return '';
+    }
+    if ( array_key_exists( $field_name, $posted_data ) ) {
+        $has_value = true;
+        return $posted_data[$field_name];
+    }
+    $array_field_name = $field_name . '[]';
+    if ( array_key_exists( $array_field_name, $posted_data ) ) {
+        $has_value = true;
+        return $posted_data[$array_field_name];
+    }
+    return '';
+}
+
+/**
+ * Set posted-data value for a field key while preserving [] suffix if it exists.
+ */
+function cf7msm_set_posted_value_for_field(  &$posted_data, $field_name, $value  ) {
+    if ( !is_array( $posted_data ) ) {
+        return;
+    }
+    if ( array_key_exists( $field_name, $posted_data ) ) {
+        $posted_data[$field_name] = $value;
+        return;
+    }
+    $array_field_name = $field_name . '[]';
+    if ( array_key_exists( $array_field_name, $posted_data ) ) {
+        $posted_data[$array_field_name] = $value;
+        return;
+    }
+    $posted_data[$field_name] = $value;
+}
+
+/**
+ * Get free-text request value for a radio/checkbox field.
+ */
+function cf7msm_get_request_free_text_for_field(  $field_name  ) {
+    $free_text_field_name = CF7MSM_FREE_TEXT_PREFIX_RADIO . $field_name;
+    if ( !isset( $_POST[$free_text_field_name] ) ) {
+        return '';
+    }
+    $free_text_value = cf7msm_sanitize_posted_data( wp_unslash( $_POST[$free_text_field_name] ) );
+    if ( !is_string( $free_text_value ) ) {
+        return '';
+    }
+    return trim( $free_text_value );
+}
+
+/**
+ * Return configured server-side TTL for pipe map storage.
+ */
+function cf7msm_pipe_store_ttl() {
+    $ttl = (int) apply_filters( 'cf7msm_pipe_store_ttl', 12 * HOUR_IN_SECONDS );
+    if ( $ttl <= 0 ) {
+        $ttl = 12 * HOUR_IN_SECONDS;
+    }
+    return $ttl;
+}
+
+/**
+ * Return posted-data key used to persist a pipe flow id across steps.
+ */
+function cf7msm_pipe_flow_field_name() {
+    return 'wpcf7msm_pipe_flow_id';
+}
+
+/**
+ * Validate flow id format.
+ */
+function cf7msm_is_valid_pipe_flow_id(  $flow_id  ) {
+    return is_string( $flow_id ) && preg_match( '/^[A-Za-z0-9]{20,128}$/', $flow_id );
+}
+
+/**
+ * Return flow id from posted data when available.
+ */
+function cf7msm_get_pipe_flow_id_from_posted_data(  $posted_data = null  ) {
+    if ( null === $posted_data && class_exists( 'WPCF7_Submission' ) ) {
+        $submission = WPCF7_Submission::get_instance();
+        if ( !empty( $submission ) && method_exists( $submission, 'get_posted_data' ) ) {
+            $posted_data = $submission->get_posted_data();
+        }
+    }
+    if ( !is_array( $posted_data ) ) {
+        return '';
+    }
+    $flow_field_name = cf7msm_pipe_flow_field_name();
+    if ( empty( $posted_data[$flow_field_name] ) ) {
+        return '';
+    }
+    $flow_id = (string) $posted_data[$flow_field_name];
+    return ( cf7msm_is_valid_pipe_flow_id( $flow_id ) ? $flow_id : '' );
+}
+
+/**
+ * Generate a new opaque flow id.
+ */
+function cf7msm_pipe_generate_flow_id() {
+    try {
+        return bin2hex( random_bytes( 16 ) );
+    } catch ( Exception $e ) {
+        return wp_generate_password( 32, false, false );
+    }
+}
+
+/**
+ * Get the current flow id (create one when requested).
+ */
+function cf7msm_get_pipe_flow_id(  $create = false  ) {
+    $posted_flow_id = cf7msm_get_pipe_flow_id_from_posted_data();
+    if ( !empty( $posted_flow_id ) ) {
+        return $posted_flow_id;
+    }
+    $flow_id = cf7msm_get( 'cf7msm_pipe_flow_id', '' );
+    if ( cf7msm_is_valid_pipe_flow_id( $flow_id ) ) {
+        return $flow_id;
+    }
+    if ( !$create ) {
+        return '';
+    }
+    $flow_id = cf7msm_pipe_generate_flow_id();
+    cf7msm_set( 'cf7msm_pipe_flow_id', $flow_id );
+    return $flow_id;
+}
+
+/**
+ * Start a new flow id for a new submission flow.
+ */
+function cf7msm_reset_pipe_flow_id() {
+    $flow_id = cf7msm_pipe_generate_flow_id();
+    cf7msm_set( 'cf7msm_pipe_flow_id', $flow_id );
+    return $flow_id;
+}
+
+/**
+ * Get server-side pipe store for a flow id.
+ */
+function cf7msm_get_pipe_store(  $flow_id = ''  ) {
+    if ( empty( $flow_id ) ) {
+        $flow_id = cf7msm_get_pipe_flow_id();
+    }
+    if ( empty( $flow_id ) ) {
+        return array();
+    }
+    $pipe_store = get_transient( 'cf7msm_pipe_store_' . $flow_id );
+    if ( !is_array( $pipe_store ) ) {
+        return array();
+    }
+    return $pipe_store;
+}
+
+/**
+ * Save server-side pipe store for a flow id.
+ */
+function cf7msm_set_pipe_store(  $flow_id, $pipe_store  ) {
+    if ( !cf7msm_is_valid_pipe_flow_id( $flow_id ) || !is_array( $pipe_store ) ) {
+        return;
+    }
+    set_transient( 'cf7msm_pipe_store_' . $flow_id, $pipe_store, cf7msm_pipe_store_ttl() );
+}
+
+/**
+ * Remove server-side pipe store for a flow id.
+ */
+function cf7msm_delete_pipe_store(  $flow_id = ''  ) {
+    if ( empty( $flow_id ) ) {
+        $flow_id = cf7msm_get_pipe_flow_id();
+    }
+    if ( !cf7msm_is_valid_pipe_flow_id( $flow_id ) ) {
+        return;
+    }
+    delete_transient( 'cf7msm_pipe_store_' . $flow_id );
+}
+
+/**
+ * Save display=>mail mappings server-side and keep posted data display-safe for state.
+ */
+function cf7msm_store_pipe_data(  &$cf7_posted_data, $flow_id = ''  ) {
+    $pipe_form_tags = cf7msm_get_pipe_form_tags();
+    if ( empty( $pipe_form_tags ) || !is_array( $cf7_posted_data ) ) {
+        return;
+    }
+    if ( empty( $flow_id ) ) {
+        $flow_id = cf7msm_get_pipe_flow_id( true );
+    }
+    if ( empty( $flow_id ) ) {
+        return;
+    }
+    $pipe_store = cf7msm_get_pipe_store( $flow_id );
+    $did_store_pipe_map = false;
+    foreach ( $pipe_form_tags as $field_name => $field_data ) {
+        $has_display_value = false;
+        $display_value = cf7msm_get_request_value_for_field( $field_name, $has_display_value );
+        if ( !$has_display_value ) {
+            continue;
+        }
+        $display_values = ( is_array( $display_value ) ? array_values( $display_value ) : array($display_value) );
+        $mail_values = array();
+        $pipes = ( isset( $field_data['pipes'] ) ? $field_data['pipes'] : null );
+        foreach ( $display_values as $display_item ) {
+            $display_item = (string) $display_item;
+            $mail_item = $display_item;
+            if ( is_object( $pipes ) && method_exists( $pipes, 'do_pipe' ) ) {
+                $mail_item = (string) $pipes->do_pipe( $display_item );
+            }
+            $mail_values[] = $mail_item;
+            if ( $display_item !== $mail_item ) {
+                if ( empty( $pipe_store[$field_name] ) || !is_array( $pipe_store[$field_name] ) ) {
+                    $pipe_store[$field_name] = array();
+                }
+                $pipe_store[$field_name][$display_item] = $mail_item;
+                $did_store_pipe_map = true;
+            }
+        }
+        if ( !empty( $field_data['has_free_text'] ) && !empty( $display_values ) ) {
+            $free_text_value = cf7msm_get_request_free_text_for_field( $field_name );
+            if ( '' !== $free_text_value ) {
+                $last_index = count( $display_values ) - 1;
+                $display_values[$last_index] = trim( $display_values[$last_index] . ' ' . $free_text_value );
+                $mail_values[$last_index] = trim( $mail_values[$last_index] . ' ' . $free_text_value );
+                if ( $display_values[$last_index] !== $mail_values[$last_index] ) {
+                    if ( empty( $pipe_store[$field_name] ) || !is_array( $pipe_store[$field_name] ) ) {
+                        $pipe_store[$field_name] = array();
+                    }
+                    $pipe_store[$field_name][$display_values[$last_index]] = $mail_values[$last_index];
+                    $did_store_pipe_map = true;
+                }
+            }
+        }
+        $display_state_value = ( is_array( $display_value ) ? $display_values : (( isset( $display_values[0] ) ? $display_values[0] : '' )) );
+        cf7msm_set_posted_value_for_field( $cf7_posted_data, $field_name, $display_state_value );
+    }
+    if ( $did_store_pipe_map || !empty( $pipe_store ) ) {
+        cf7msm_set_pipe_store( $flow_id, $pipe_store );
+    }
+}
+
+/**
+ * Apply server-side pipe mapping for a field value.
+ */
+function cf7msm_map_pipe_value_for_mail(  $field_name, $submitted, $pipe_store  ) {
+    if ( !is_array( $pipe_store ) || empty( $pipe_store[$field_name] ) || !is_array( $pipe_store[$field_name] ) ) {
+        return $submitted;
+    }
+    $field_map = $pipe_store[$field_name];
+    if ( is_array( $submitted ) ) {
+        return array_map( function ( $item ) use($field_map) {
+            $item = (string) $item;
+            return ( array_key_exists( $item, $field_map ) ? $field_map[$item] : $item );
+        }, $submitted );
+    }
+    if ( null === $submitted ) {
+        return $submitted;
+    }
+    $submitted = (string) $submitted;
+    return ( array_key_exists( $submitted, $field_map ) ? $field_map[$submitted] : $submitted );
+}
+
+/**
+ * Format a mapped value using CF7's default mail-tag formatting rules.
+ */
+function cf7msm_format_mail_tag_value(  $value, $html  ) {
+    $separator = ( 'body' === WPCF7_Mail::get_current_component_name() ? wp_get_list_item_separator() : ', ' );
+    $value = wpcf7_flat_join( $value, array(
+        'separator' => $separator,
+    ) );
+    if ( $html ) {
+        $value = esc_html( $value );
+        $value = wptexturize( $value );
+    }
+    return $value;
+}
+
+/**
+ * Replace piped display values with private values at mail composition time.
+ */
+function cf7msm_replace_pipe_value_for_mail_tag(
+    $replaced,
+    $submitted,
+    $html,
+    $mail_tag
+) {
+    if ( !is_object( $mail_tag ) || !method_exists( $mail_tag, 'field_name' ) ) {
+        return $replaced;
+    }
+    if ( method_exists( $mail_tag, 'get_option' ) && $mail_tag->get_option( 'do_not_heat' ) ) {
+        return $replaced;
+    }
+    $submission = WPCF7_Submission::get_instance();
+    if ( empty( $submission ) || !method_exists( $submission, 'get_posted_data' ) ) {
+        return $replaced;
+    }
+    $posted_data = $submission->get_posted_data();
+    if ( empty( $posted_data['cf7msm-step'] ) && empty( $posted_data['cf7msm_options'] ) ) {
+        return $replaced;
+    }
+    $flow_id = cf7msm_get_pipe_flow_id_from_posted_data( $posted_data );
+    if ( empty( $flow_id ) ) {
+        return $replaced;
+    }
+    $pipe_store = cf7msm_get_pipe_store( $flow_id );
+    if ( empty( $pipe_store ) ) {
+        return $replaced;
+    }
+    $field_name = $mail_tag->field_name();
+    if ( empty( $field_name ) ) {
+        return $replaced;
+    }
+    $mapped_value = cf7msm_map_pipe_value_for_mail( $field_name, $submitted, $pipe_store );
+    if ( $mapped_value === $submitted ) {
+        return $replaced;
+    }
+    return cf7msm_format_mail_tag_value( $mapped_value, $html );
+}
+
+add_filter(
+    'wpcf7_mail_tag_replaced',
+    'cf7msm_replace_pipe_value_for_mail_tag',
+    10,
+    4
+);
+/**
+ * Return a field value from saved data using key or key[].
+ */
+function cf7msm_get_saved_field_value(  $saved_data, $field_name, &$has_value  ) {
+    $has_value = false;
+    if ( !is_array( $saved_data ) ) {
+        return '';
+    }
+    if ( array_key_exists( $field_name, $saved_data ) ) {
+        $has_value = true;
+        return $saved_data[$field_name];
+    }
+    $array_field_name = $field_name . '[]';
+    if ( array_key_exists( $array_field_name, $saved_data ) ) {
+        $has_value = true;
+        return $saved_data[$array_field_name];
+    }
+    return '';
 }
 
 /**
@@ -385,22 +867,46 @@ add_filter( 'wpcf7_posted_data', 'cf7msm_add_other_steps_filter', 9 );
  * If use cookies and not the last step, store the values here after it's been validated.
  */
 function cf7msm_store_data_steps() {
+    $cf7_posted_data = WPCF7_Submission::get_instance()->get_posted_data();
+    $is_last_step = false;
+    $is_first_step = false;
+    if ( empty( $cf7_posted_data['cf7msm-step'] ) && empty( $cf7_posted_data['cf7msm_options'] ) ) {
+        return;
+    }
+    if ( !empty( $cf7_posted_data['cf7msm_options'] ) ) {
+        $options = json_decode( stripslashes( $cf7_posted_data['cf7msm_options'] ), true );
+        $is_last_step = !empty( $options['last_step'] );
+        $is_first_step = !empty( $options['first_step'] );
+    } else {
+        if ( !empty( $cf7_posted_data['cf7msm-step'] ) && preg_match( '/(\\d+)-(\\d+)/', $cf7_posted_data['cf7msm-step'], $matches ) ) {
+            $is_first_step = !empty( $matches[1] ) && intval( $matches[1] ) === 1;
+        }
+    }
+    $flow_id = '';
+    if ( $is_first_step ) {
+        $flow_id = cf7msm_get_pipe_flow_id_from_posted_data( $cf7_posted_data );
+        if ( empty( $flow_id ) ) {
+            $flow_id = cf7msm_reset_pipe_flow_id();
+        } else {
+            cf7msm_set( 'cf7msm_pipe_flow_id', $flow_id );
+        }
+    } else {
+        $flow_id = cf7msm_get_pipe_flow_id_from_posted_data( $cf7_posted_data );
+    }
+    if ( empty( $flow_id ) ) {
+        $flow_id = cf7msm_get_pipe_flow_id( true );
+    }
+    if ( !empty( $flow_id ) ) {
+        $cf7_posted_data[cf7msm_pipe_flow_field_name()] = $flow_id;
+    }
+    cf7msm_store_pipe_data( $cf7_posted_data, $flow_id );
     $use_cookies = true;
     if ( $use_cookies ) {
-        $cf7_posted_data = WPCF7_Submission::get_instance()->get_posted_data();
-        $is_last_step = false;
-        if ( empty( $cf7_posted_data['cf7msm-step'] ) && empty( $cf7_posted_data['cf7msm_options'] ) ) {
-            return;
-        }
         $free_texts_lengths = array_filter( $_POST, function ( $key ) {
             return strpos( $key, '_cf7msm_free_text_reflen_' ) === 0;
         }, ARRAY_FILTER_USE_KEY );
         foreach ( $free_texts_lengths as $key => $len ) {
             $cf7_posted_data[$key] = intval( $len );
-        }
-        if ( !empty( $cf7_posted_data['cf7msm_options'] ) ) {
-            $options = json_decode( stripslashes( $cf7_posted_data['cf7msm_options'] ), true );
-            $is_last_step = !empty( $options['last_step'] );
         }
         if ( !$is_last_step ) {
             // don't track big cookies on last step bc submitting on the last step doesn't use the cookie.
@@ -527,8 +1033,14 @@ function cf7msm_mail_sent() {
         $count = ( !empty( $stats['count'] ) ? $stats['count'] : 0 );
         $stats['count'] = 1 + $count;
         update_option( '_cf7msm_stats', $stats );
+        $flow_id = cf7msm_get_pipe_flow_id_from_posted_data( $posted_data );
+        if ( empty( $flow_id ) ) {
+            $flow_id = cf7msm_get_pipe_flow_id();
+        }
+        cf7msm_delete_pipe_store( $flow_id );
         cf7msm_remove( 'cf7msm-step' );
         cf7msm_remove( 'cf7msm_posted_data' );
+        cf7msm_remove( 'cf7msm_pipe_flow_id' );
         cf7msm_remove( 'cf7msm_prev_urls' );
         cf7msm_remove( 'cf7msm-first-step' );
         cf7msm_remove( 'cf7msm_big_cookie' );

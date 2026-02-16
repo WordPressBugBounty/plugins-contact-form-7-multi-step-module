@@ -75,8 +75,11 @@ function cf7msm_multiform_shortcode_handler(  $tag  ) {
     //return raw value, let filters sanitize if needed.
     $cf7msm_posted_data = cf7msm_get( 'cf7msm_posted_data' );
     if ( !empty( $cf7msm_posted_data ) && is_array( $cf7msm_posted_data ) ) {
-        $value = ( isset( $cf7msm_posted_data[$field_name] ) ? $cf7msm_posted_data[$field_name] : '' );
-        //check for free_text
+        $has_posted_value = false;
+        $posted_value = cf7msm_get_saved_field_value( $cf7msm_posted_data, $field_name, $has_posted_value );
+        if ( $has_posted_value ) {
+            $value = $posted_value;
+        }
     }
     if ( is_array( $value ) ) {
         $value = implode( ", ", $value );

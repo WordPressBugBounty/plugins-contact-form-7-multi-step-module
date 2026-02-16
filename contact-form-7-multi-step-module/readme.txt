@@ -1,9 +1,9 @@
 === Contact Form 7 Multi-Step Forms ===
 Contributors: webheadllc
-Tags: contact form 7, multistep form, form, multiple pages, contact
+Tags: contact form 7, multistep form, cf7, multi page form, persist
 Requires at least: 4.7
 Tested up to: 6.9
-Stable tag: 4.5
+Stable tag: 4.6
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -11,11 +11,17 @@ Enables the Contact Form 7 plugin to create multi-page, multi-step forms.
 
 == Description ==
 
-I needed a contact form that spanned across multiple pages and in the end would send an email with all the info collected.  This plugin adds onto the popular Contact Form 7 plugin to do just that.
+Add multi-step forms to Contact Form 7 with full data persistence between pages and a single email on final submission. Upgrade to Pro to submit 5MB forms through sessionStorage, conditional step-skipping, and priority support.
 
-Sample of this working is at [https://webheadcoder.com/contact-form-7-multi-step-form/](https://webheadcoder.com/contact-form-7-multi-step-form/)
+**The Original Contact Form 7 Multi-Step Plugin**
 
-Requires the [Contact Form 7 plugin](https://wordpress.org/plugins/contact-form-7/), version 5.2 or above, by Takayuki Miyoshi.
+Since 2012, this has been the go-to multi-step solution for Contact Form 7 users. It’s built for reliability and trusted on thousands of sites. Split your CF7 form across multiple pages, preserve data between steps, and send one complete email at the end.
+
+It's been running quietly on thousands of sites through every major WordPress and CF7 release. If you need multi-step forms with CF7, this is where most people start.
+
+See it in action at [https://webheadcoder.com/contact-form-7-multi-step-form/](https://webheadcoder.com/contact-form-7-multi-step-form/)
+
+Requires [Contact Form 7](https://wordpress.org/plugins/contact-form-7/) (5.2 or above) by Rock Lobster Inc. (Takayuki Miyoshi).
 
 **Usage**
 
@@ -71,9 +77,7 @@ When a visitor to your site visits the 4th step in your multi step form without 
 
 **What this plugin DOES NOT do:**  
 
-* This plugin does not support file uploads on every form.  If you need to use file uploads make sure to place it on the last step.  
-
-* This plugin currently does not support "pipes" in the select field.  See https://contactform7.com/selectable-recipient-with-pipes/ for more on what "pipes" is on the Contact Form 7 site.  
+* This plugin does not support file uploads on every form.  If you need to use file uploads make sure to place it on the last step.
 
 * This plugin does not load another form on the same page.  It only works when the forms are on separate pages.  Many have asked to make it load via ajax so all forms can reside on one page.  This plugin does not support that.
 
@@ -85,56 +89,73 @@ Another feature the Pro version offers is the ability to skip steps with the "Co
 == Frequently Asked Questions ==
 
 = The Next button doesn't show up =
-Like all Contact Form 7 forms, you still need to add a button to submit the form.  Use the normal submit button with any label you want like so `[submit "Next"]`.
+You still need a standard Contact Form 7 submit button on each step.
 
-The `multistep` form tag is a hidden field and tries not to add any spacing to your form.  In this effort, anything directly after this tag may be hidden.  To prevent this, add a carriage return after the `multistep` form tag, or just follow the directions and place the form tag at the end of the form.
+Add a submit tag like this:
+`[submit "Next"]`
+
+Also note: `multistep` is a hidden field. If content appears to disappear right after it, place the tag at the end of the form (or add a line break after it).
 
 = I keep getting the "Please fill out the form on the previous page" message.  What's wrong? =
+This message usually means step-tracking data is missing. Check these first:
 
-It could be one of these reasons:
-
-1. Your Caching system is not allowing cookies to be set in a normal way.  No workarounds or fixes are planned at this time.  You will need to turn off caching for cookies named cf7*.
-2. Your protocol or domain is not the same on all pages.  Each page that holds a form needs to have the same protocol and domain.  If your first page uses https like https://webheadcoder.com, your second page cannot be http:// or a subdomain of that.
-3.  Make sure your first form has the first_step attribute in the multistep form-tag, like:  `[multistep multistep-123 first_step "/your-next-url/"]`
+1. Caching is blocking cookies. Exclude cookies named `cf7*` from cache behavior.
+2. Form step URLs do not match protocol/domain. Every step must use the same domain and protocol.   For example, if your first page uses https like https://webheadcoder.com, your second page cannot use http:// or a subdomain of that.
+3. The first form is missing `first_step` in its multistep tag, for example:
+`[multistep multistep-123 first_step "/your-next-url/"]`
 
 = Why are no values being passed from one form to the next form? =
+If the page reloads on submit instead of using AJAX, Contact Form 7 JavaScript is not running correctly or the REST API is disabled.
 
-If your form reloads the page after hitting the submit button, you either disabled the WordPress REST API or javascript for Contact Form 7 isn't working correctly.  Please see the Contact Form 7's troubleshooting page for more information:
+Use Contact Form 7's troubleshooting guide:
 [https://contactform7.com/why-isnt-my-ajax-contact-form-working-correctly/](https://contactform7.com/why-isnt-my-ajax-contact-form-working-correctly/)
 
 
 = How can I show a summary of what the user entered or show fields from previous steps? =
 
 `[multiform "your-name"]`  
-The multiform form-tag can be used to display a field from a previous step.  Replace `your-name` with the name of your field.
+Use the `multiform` tag to display values captured on earlier steps. Replace `your-name` with your field name.
 
 = My form values aren't being sent in the email.  I get [multiform "your-name"] instead of the actual person's name. =
+`multiform` is for the Form tab only.
 
-The multiform form-tag should only be used on the Form tab.  On the Mail tab follow the instructions from the Contact Fom 7 documentation.  So if you wanted to show the `your-name` field, type `[your-name]`.
+For email content in the Mail tab, use standard CF7 mail-tags such as `[your-name]`, not `[multiform "your-name"]`.
 
-It's also important that the last form has the multistep form-tag.  
+Also confirm the last step includes the `multistep` tag.
 
 = Can I have an email sent on the first step of the multi-step forms? =
-
-Yes, you can.  Make sure to check the "Send Email" checkbox or have the send_email attribute in the multistep form-tag like:  `[multistep multistep-123 first_step send_email "/your-next-url/"]`.  
+Yes. Enable "Send Email" in the tag generator, or add `send_email` directly in the tag:
+`[multistep multistep-123 first_step send_email "/your-next-url/"]`
 
 = My forms are not working as expected.  What's wrong? =
+Start with these checks:
 
-- Make sure you have the `multistep` tag on each and every form.
-
-- It is very common for other plugins to have javascript errors which can prevent this plugin from running properly.  Deactivate all other plugins and try again.
+- Confirm every step includes a `multistep` tag.
+- Look for JavaScript errors from other plugins or themes that may block CF7 scripts.
+- Temporarily deactivate other plugins and test again to isolate conflicts.
 
 = Why "place your cursor at the end of the form" before inserting the multistep tag? =
+`multistep` is a hidden field and intentionally adds minimal spacing. If another element is placed immediately after it, that element may appear hidden.
 
-The `multistep` form tag is a hidden field and tries not to add any spacing to your form.  In this effort, anything directly after this tag may be hidden.  To prevent this, add a carriage return after the `multistep` form tag, or just follow the directions and place the form tag at the end of the form.
+To avoid this, insert `multistep` at the end of the form or add a line break after the tag.
 
 = How do I get Flamingo or CFDB7 to not save every form? =
-Make sure to check the "Skip Save" checkbox or have the skip_save attribute in the multistep form-tag like: `[multistep multistep-123 skip_save "/your-next-url/"]`.  
+Use the "Skip Save" option, or add `skip_save` in your multistep tag:
+`[multistep multistep-123 skip_save "/your-next-url/"]`
 
 = When checkbox fields are left unchecked they appear as [field-name] in the email.  How do I resolve this? =
-When checkboxes are not checked they aren't submitted through the form so the last step of the form doesn't know the unchecked checkbox field exists.  To get around this issue add a hidden form tag like `[hidden field-name]` to the last step.  This way the last step will either submit the previously set value or a blank value.
+Unchecked checkboxes are not submitted, so the final step may not know that field exists.
+
+Add a hidden field with the same name on the last step, for example:
+`[hidden field-name]`
+
+This ensures the final step submits either the saved value or a blank value.
 
 == Changelog ==
+
+= 4.6 =
+* added capability to do pipes in dropdowns.  
+* updated Freemius.  
 
 = 4.5 =
 * updated scopes to resolve conflicts with other themes and plugins.  
@@ -448,4 +469,3 @@ Thanks to @eddraw, updated deprecated functions.
 
 = 1.0 =
 * Initial release.
-

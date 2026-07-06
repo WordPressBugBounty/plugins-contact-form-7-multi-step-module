@@ -193,6 +193,122 @@ import '../scss/cf7msm.scss';
 				cf7msm_ss[pipe_flow_field_name] = flow_id;
 			}
 		}
+
+		function cf7msmGetHoneypotFieldMatch(name) {
+			if ( typeof name !== 'string' || name.length === 0 || name.length > 255 || /[\x00-\x1F\x7F]/.test(name) ) {
+				return null;
+			}
+
+			if ( typeof cf7msm_honeypot_field_matchers === 'undefined' || !Array.isArray(cf7msm_honeypot_field_matchers) ) {
+				return null;
+			}
+
+			for ( var i = 0; i < cf7msm_honeypot_field_matchers.length; i++ ) {
+				var matcher = cf7msm_honeypot_field_matchers[i];
+				if ( !matcher || typeof matcher !== 'object' ) {
+					continue;
+				}
+
+				if ( matcher.type === 'exact' && typeof matcher.value === 'string' && name === matcher.value ) {
+					return {
+						matcher: matcher,
+						matches: [name]
+					};
+				}
+
+				if ( matcher.type !== 'regex' || typeof matcher.pattern !== 'string' ) {
+					continue;
+				}
+
+				var pattern = matcher.pattern;
+				if ( pattern.length === 0 || pattern.length > 255 || pattern.charAt(0) !== '^' || pattern.charAt(pattern.length - 1) !== '$' ) {
+					continue;
+				}
+
+				try {
+					var matches = new RegExp(pattern).exec(name);
+					if ( matches !== null ) {
+						return {
+							matcher: matcher,
+							matches: matches
+						};
+					}
+				}
+				catch (e) {
+					continue;
+				}
+			}
+
+			return null;
+		}
+
+		function cf7msmGetHoneypotWrapper(input, matcher) {
+			if ( !matcher || typeof matcher.wrapper_selector !== 'string' ) {
+				return null;
+			}
+
+			var wrapper_selector = matcher.wrapper_selector;
+			if ( wrapper_selector.length === 0 || wrapper_selector.length > 255 || /[\x00-\x1F\x7F]/.test(wrapper_selector) ) {
+				return null;
+			}
+
+			try {
+				var wrapper = $(input).closest(wrapper_selector);
+				return wrapper.length > 0 ? wrapper : null;
+			}
+			catch (e) {
+				return null;
+			}
+		}
+
+		function cf7msmAddHoneypotFieldName(names, name) {
+			if ( typeof name === 'string' && name !== '' ) {
+				names[name] = true;
+			}
+		}
+
+		function cf7msmGetHoneypotFieldNames(form) {
+			var names = Object.create(null);
+			var cf7_form_arg = form;
+			if ( ! ( cf7_form_arg instanceof jQuery ) ) {
+				cf7_form_arg = $(cf7_form_arg);
+			}
+
+			cf7_form_arg.find('input[name]').each(function() {
+				var field_match = cf7msmGetHoneypotFieldMatch(this.name);
+				if ( field_match === null ) {
+					return;
+				}
+
+				var matcher = field_match.matcher;
+				var wrapper = cf7msmGetHoneypotWrapper(this, matcher);
+				if ( typeof matcher.wrapper_selector === 'string' && wrapper === null ) {
+					return;
+				}
+
+				cf7msmAddHoneypotFieldName(names, this.name);
+
+				if ( wrapper !== null ) {
+					wrapper.find('input[name]').each(function() {
+						cf7msmAddHoneypotFieldName(names, this.name);
+					});
+					return;
+				}
+
+				if ( typeof matcher.honeypot_name_capture !== 'undefined' ) {
+					var capture = parseInt(matcher.honeypot_name_capture, 10);
+					if ( capture > 0 && field_match.matches[capture] ) {
+						cf7msmAddHoneypotFieldName(names, field_match.matches[capture]);
+					}
+				}
+			});
+
+			return names;
+		}
+
+		function cf7msmIsHoneypotFieldName(name, honeypotFieldNames) {
+			return !!(honeypotFieldNames && Object.prototype.hasOwnProperty.call(honeypotFieldNames, name));
+		}
 		
 		if ( cf7msm_hasSS() ) {
 			cf7msm_ss = cf7msm_getStorageObject( sessionStorage, 'cf7msm' );
@@ -263,10 +379,14 @@ import '../scss/cf7msm.scss';
 		function cf7msm() {
 			
 			if (posted_data) {
+				var honeypotFieldNames = cf7msmGetHoneypotFieldNames(cf7msm_form);
 				
 				$.each(posted_data, function(key, val){
 					if ( key.indexOf('[]') === key.length - 2 ) {
 						key = key.substring(0, key.length - 2 );
+					}
+					if ( cf7msmIsHoneypotFieldName(key, honeypotFieldNames) ) {
+						return true;
 					}
 					if ( key.indexOf('_') != 0 && key != 'cf7msm-step' && key != 'cf7msm_options') {
 						var field = cf7msm_form.find('*[name="' + key + '"]:not([data-cf7msm-previous])');
@@ -468,10 +588,14 @@ import '../scss/cf7msm.scss';
 				
 				var free_text_els = $('.has-free-text', form);
 				var checkbox_free_text_map = {}; // Track which checkbox fields have free text
+				var honeypotFieldNames = cf7msmGetHoneypotFieldNames(form);
 
 				$.each(e.detail.inputs, function(i){
 					var name = e.detail.inputs[i].name;
 					var value = e.detail.inputs[i].value;
+					if ( cf7msmIsHoneypotFieldName(name, honeypotFieldNames) ) {
+						return true;
+					}
 
 					// CF7 v5.x Does not return free text inputs! or cf7msm inputs
 					// alter value if it has free text

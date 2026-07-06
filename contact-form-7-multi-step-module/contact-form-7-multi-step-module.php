@@ -7,7 +7,7 @@ Description: Enables the Contact Form 7 plugin to create multi-page, multi-step 
 Requires Plugins:  contact-form-7
 Author: Webhead LLC.
 Author URI: http://webheadcoder.com
-Version: 4.6
+Version: 4.6.2
 Text Domain: contact-form-7-multi-step-module
 */
 /*  Copyright 2025 Webhead LLC (email: info at webheadcoder.com)
@@ -38,6 +38,10 @@ if ( function_exists( 'cf7msm_fs' ) ) {
         function cf7msm_fs() {
             global $cf7msm_fs;
             if ( !isset( $cf7msm_fs ) ) {
+                // Activate multisite network integration.
+                if ( !defined( 'WP_FS__PRODUCT_1614_MULTISITE' ) ) {
+                    define( 'WP_FS__PRODUCT_1614_MULTISITE', true );
+                }
                 // Include Freemius SDK via Composer when available.
                 if ( file_exists( __DIR__ . '/vendor/autoload.php' ) ) {
                     require_once __DIR__ . '/vendor/autoload.php';
@@ -46,19 +50,20 @@ if ( function_exists( 'cf7msm_fs' ) ) {
                     require_once __DIR__ . '/freemius/start.php';
                 }
                 $cf7msm_fs = fs_dynamic_init( array(
-                    'id'             => '1614',
-                    'slug'           => 'contact-form-7-multi-step-module',
-                    'type'           => 'plugin',
-                    'public_key'     => 'pk_b445061ad8b540f6a89c2c4f4df19',
-                    'is_premium'     => false,
-                    'premium_suffix' => '(PRO)',
-                    'has_addons'     => false,
-                    'has_paid_plans' => true,
-                    'menu'           => array(
+                    'id'               => '1614',
+                    'slug'             => 'contact-form-7-multi-step-module',
+                    'type'             => 'plugin',
+                    'public_key'       => 'pk_b445061ad8b540f6a89c2c4f4df19',
+                    'is_premium'       => false,
+                    'premium_suffix'   => '(PRO)',
+                    'has_addons'       => false,
+                    'has_paid_plans'   => true,
+                    'is_org_compliant' => true,
+                    'menu'             => array(
                         'first-path' => 'plugins.php',
                         'support'    => false,
                     ),
-                    'is_live'        => true,
+                    'is_live'          => true,
                 ) );
             }
             return $cf7msm_fs;
@@ -68,7 +73,7 @@ if ( function_exists( 'cf7msm_fs' ) ) {
         cf7msm_fs();
         // Signal that SDK was initiated.
         do_action( 'cf7msm_fs_loaded' );
-        define( 'CF7MSM_VERSION', '4.6' );
+        define( 'CF7MSM_VERSION', '4.6.2' );
         define( 'CF7MSM_PLUGIN', __FILE__ );
         define( 'CF7MSM_FREE_TEXT_PREFIX_RADIO', '_wpcf7_free_text_' );
         define( 'CF7MSM_FREE_TEXT_PREFIX_CHECKBOX', '_wpcf7_free_text_' );

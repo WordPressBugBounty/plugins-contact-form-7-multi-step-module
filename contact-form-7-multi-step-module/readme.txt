@@ -2,8 +2,8 @@
 Contributors: webheadllc
 Tags: contact form 7, multistep form, cf7, multi page form, persist
 Requires at least: 4.7
-Tested up to: 6.9
-Stable tag: 4.6
+Tested up to: 7.0
+Stable tag: 4.6.2
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -152,6 +152,13 @@ Add a hidden field with the same name on the last step, for example:
 This ensures the final step submits either the saved value or a blank value.
 
 == Changelog ==
+
+= 4.6.2 =
+* added compatibility with Honeypot for Contact Form 7 and WP Armour so generated honeypot fields don't persist between steps.
+* updated Freemius.  
+
+= 4.6.1 =
+* updated Freemius.  
 
 = 4.6 =
 * added capability to do pipes in dropdowns.  

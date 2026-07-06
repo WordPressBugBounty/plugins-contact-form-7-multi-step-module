@@ -151,11 +151,12 @@ function cf7msm_scripts() {
         CF7MSM_VERSION,
         true
     );
-    $cf7msm_posted_data = cf7msm_get( 'cf7msm_posted_data', [] );
+    $cf7msm_posted_data = cf7msm_remove_honeypot_fields_from_posted_data( cf7msm_get( 'cf7msm_posted_data', [] ) );
     if ( empty( $cf7msm_posted_data ) ) {
         $cf7msm_posted_data = array();
     }
     wp_localize_script( 'cf7msm', 'cf7msm_posted_data', $cf7msm_posted_data );
+    wp_localize_script( 'cf7msm', 'cf7msm_honeypot_field_matchers', cf7msm_get_active_honeypot_field_matchers() );
 }
 
 add_action( 'wp_enqueue_scripts', 'cf7msm_scripts' );
@@ -446,6 +447,301 @@ function cf7msm_get_pipe_flow_id_from_posted_data(  $posted_data = null  ) {
     }
     $flow_id = (string) $posted_data[$flow_field_name];
     return ( cf7msm_is_valid_pipe_flow_id( $flow_id ) ? $flow_id : '' );
+}
+
+/**
+ * Return supported honeypot plugins and their field-name matchers.
+ *
+ * Array keys are plugin basenames. Each matcher must explicitly use either an
+ * exact field name or an anchored regular expression. Regex matchers may name
+ * one capture group that contains the corresponding CF7 honeypot tag name.
+ * Matchers with a wrapper_selector may also be confirmed in JavaScript, where
+ * the rendered form wrapper can be inspected.
+ */
+function cf7msm_get_honeypot_plugins() {
+    $plugins = array(
+        'contact-form-7-honeypot/honeypot.php' => array(array(
+            'type'                  => 'regex',
+            'pattern'               => '^(.+)-random-hash$',
+            'honeypot_name_capture' => 1,
+            'wrapper_selector'      => '[data-cf7apps-honeypot]',
+        )),
+        'honeypot/wp-armour.php'               => array(array(
+            'type'             => 'exact',
+            'value'            => 'alt_s',
+            'wrapper_selector' => '.wpa_hidden_field, .altEmail_container',
+        ), array(
+            'type'             => 'exact',
+            'value'            => get_option( 'wpa_field_name', '' ),
+            'wrapper_selector' => '.wpa_hidden_field, .altEmail_container',
+        )),
+    );
+    /**
+     * Filter honeypot plugin basenames and their field-name matchers.
+     *
+     * @param array $plugins Plugin basenames as keys and arrays of strict
+     *                       matcher descriptors as values.
+     */
+    return apply_filters( 'cf7msm_honeypot_plugins', $plugins );
+}
+
+/**
+ * Return whether a plugin basename is active on the current site or network.
+ */
+function cf7msm_is_plugin_active(  $plugin  ) {
+    if ( !is_string( $plugin ) || $plugin === '' ) {
+        return false;
+    }
+    if ( !function_exists( 'is_plugin_active' ) ) {
+        require_once ABSPATH . 'wp-admin/includes/plugin.php';
+    }
+    return is_plugin_active( $plugin );
+}
+
+/**
+ * Normalize and validate a honeypot field-name matcher.
+ */
+function cf7msm_normalize_honeypot_field_matcher(  $matcher  ) {
+    if ( !is_array( $matcher ) || empty( $matcher['type'] ) ) {
+        return array();
+    }
+    if ( $matcher['type'] === 'exact' ) {
+        if ( !isset( $matcher['value'] ) || !is_string( $matcher['value'] ) ) {
+            return array();
+        }
+        $value = $matcher['value'];
+        if ( $value === '' || strlen( $value ) > 255 || preg_match( '/[\\x00-\\x1F\\x7F]/', $value ) ) {
+            return array();
+        }
+        $normalized = array(
+            'type'  => 'exact',
+            'value' => $value,
+        );
+        if ( !cf7msm_add_honeypot_wrapper_selector( $normalized, $matcher ) ) {
+            return array();
+        }
+        return $normalized;
+    }
+    if ( $matcher['type'] !== 'regex' || empty( $matcher['pattern'] ) || !is_string( $matcher['pattern'] ) ) {
+        return array();
+    }
+    $pattern = $matcher['pattern'];
+    if ( strlen( $pattern ) > 255 || $pattern[0] !== '^' || substr( $pattern, -1 ) !== '$' ) {
+        return array();
+    }
+    // Keep expressions portable to JavaScript and avoid expensive constructs.
+    if ( preg_match( '/[^\\x20-\\x7E]/', $pattern ) || strpos( $pattern, '(?' ) !== false || strpos( $pattern, '(*' ) !== false || preg_match( '/\\[(?:\\^)?\\[:\\^?[A-Za-z]+:\\]\\]/', $pattern ) || preg_match( '/\\\\[1-9]/', $pattern ) || preg_match( '/(?:^|[^\\\\])(?:[+*?]|\\{\\d+(?:,\\d*)?\\})\\+/', $pattern ) || preg_match( '/\\)(?:[+*]|\\{\\d+(?:,\\d*)?\\})/', $pattern ) ) {
+        return array();
+    }
+    // Only allow escape sequences with identical PCRE and ECMAScript meaning.
+    $portable_escapes = str_split( 'dDsSwWbBfnrt\\^$.*+?()[]{}|/-' );
+    $escaped_characters = array();
+    preg_match_all( '/\\\\(.)/s', $pattern, $escaped_characters );
+    foreach ( $escaped_characters[1] as $escaped_character ) {
+        if ( !in_array( $escaped_character, $portable_escapes, true ) ) {
+            return array();
+        }
+    }
+    $php_pattern = '~' . str_replace( '~', '\\~', $pattern ) . '~D';
+    if ( @preg_match( $php_pattern, '' ) === false || preg_match( $php_pattern, '' ) === 1 ) {
+        return array();
+    }
+    $normalized = array(
+        'type'    => 'regex',
+        'pattern' => $pattern,
+    );
+    if ( isset( $matcher['honeypot_name_capture'] ) ) {
+        $capture = filter_var( $matcher['honeypot_name_capture'], FILTER_VALIDATE_INT, array(
+            'options' => array(
+                'min_range' => 1,
+                'max_range' => 9,
+            ),
+        ) );
+        if ( $capture === false ) {
+            return array();
+        }
+        $normalized['honeypot_name_capture'] = $capture;
+    }
+    if ( !cf7msm_add_honeypot_wrapper_selector( $normalized, $matcher ) ) {
+        return array();
+    }
+    return $normalized;
+}
+
+/**
+ * Add a validated wrapper selector to a honeypot matcher when configured.
+ */
+function cf7msm_add_honeypot_wrapper_selector(  &$normalized, $matcher  ) {
+    if ( !isset( $matcher['wrapper_selector'] ) ) {
+        return true;
+    }
+    if ( !is_string( $matcher['wrapper_selector'] ) ) {
+        return false;
+    }
+    $wrapper_selector = trim( $matcher['wrapper_selector'] );
+    if ( $wrapper_selector === '' || strlen( $wrapper_selector ) > 255 || preg_match( '/[\\x00-\\x1F\\x7F]/', $wrapper_selector ) ) {
+        return false;
+    }
+    $normalized['wrapper_selector'] = $wrapper_selector;
+    return true;
+}
+
+/**
+ * Return validated field-name matchers for active supported honeypot plugins.
+ */
+function cf7msm_get_active_honeypot_field_matchers() {
+    $matchers = array();
+    $seen_matchers = array();
+    $plugins = cf7msm_get_honeypot_plugins();
+    if ( !is_array( $plugins ) ) {
+        return $matchers;
+    }
+    foreach ( $plugins as $plugin => $plugin_matchers ) {
+        if ( !cf7msm_is_plugin_active( $plugin ) ) {
+            continue;
+        }
+        if ( !is_array( $plugin_matchers ) ) {
+            continue;
+        }
+        foreach ( $plugin_matchers as $matcher ) {
+            $matcher = cf7msm_normalize_honeypot_field_matcher( $matcher );
+            if ( empty( $matcher ) ) {
+                continue;
+            }
+            $matcher_key = serialize( $matcher );
+            if ( isset( $seen_matchers[$matcher_key] ) ) {
+                continue;
+            }
+            $seen_matchers[$matcher_key] = true;
+            $matchers[] = $matcher;
+        }
+    }
+    return $matchers;
+}
+
+/**
+ * Return details for the active honeypot matcher that accepts a field name.
+ */
+function cf7msm_get_honeypot_field_match(  $field_name  ) {
+    if ( !is_string( $field_name ) || $field_name === '' || strlen( $field_name ) > 255 || preg_match( '/[\\x00-\\x1F\\x7F]/', $field_name ) ) {
+        return array();
+    }
+    foreach ( cf7msm_get_active_honeypot_field_matchers() as $matcher ) {
+        if ( $matcher['type'] === 'exact' ) {
+            if ( $matcher['value'] === $field_name ) {
+                return array(
+                    'matcher' => $matcher,
+                    'matches' => array($field_name),
+                );
+            }
+            continue;
+        }
+        $matches = array();
+        $php_pattern = '~(*LIMIT_MATCH=10000)(*LIMIT_DEPTH=100)' . str_replace( '~', '\\~', $matcher['pattern'] ) . '~D';
+        if ( preg_match( $php_pattern, $field_name, $matches ) === 1 ) {
+            return array(
+                'matcher' => $matcher,
+                'matches' => $matches,
+            );
+        }
+    }
+    return array();
+}
+
+/**
+ * Return honeypot tag names from the current CF7 form.
+ */
+function cf7msm_get_honeypot_form_tag_names() {
+    if ( !function_exists( 'wpcf7_scan_form_tags' ) ) {
+        return array();
+    }
+    $honeypot_field_names = array();
+    $tags = wpcf7_scan_form_tags( array(
+        'type' => 'honeypot',
+    ) );
+    if ( empty( $tags ) || !is_array( $tags ) ) {
+        return $honeypot_field_names;
+    }
+    foreach ( $tags as $tag ) {
+        $field_name = '';
+        if ( is_object( $tag ) && !empty( $tag->name ) ) {
+            $field_name = (string) $tag->name;
+        } else {
+            if ( is_array( $tag ) && !empty( $tag['name'] ) ) {
+                $field_name = (string) $tag['name'];
+            }
+        }
+        if ( $field_name !== '' ) {
+            $honeypot_field_names[$field_name] = true;
+        }
+    }
+    return $honeypot_field_names;
+}
+
+/**
+ * Return Honeypot for Contact Form 7 fields that should not persist across steps.
+ */
+function cf7msm_get_honeypot_field_names_to_ignore(  $posted_data = array()  ) {
+    if ( !is_array( $posted_data ) ) {
+        return array();
+    }
+    $ignore_fields = array();
+    $honeypot_field_names = cf7msm_get_honeypot_form_tag_names();
+    foreach ( $honeypot_field_names as $field_name => $ignore ) {
+        if ( array_key_exists( $field_name, $posted_data ) ) {
+            $ignore_fields[$field_name] = true;
+        }
+    }
+    foreach ( $posted_data as $key => $value ) {
+        $field_match = cf7msm_get_honeypot_field_match( $key );
+        if ( empty( $field_match ) ) {
+            continue;
+        }
+        $matcher = $field_match['matcher'];
+        if ( !empty( $matcher['wrapper_selector'] ) && ($matcher['type'] === 'exact' || empty( $matcher['honeypot_name_capture'] )) ) {
+            continue;
+        }
+        if ( $matcher['type'] === 'exact' || empty( $matcher['honeypot_name_capture'] ) ) {
+            $ignore_fields[$key] = true;
+            continue;
+        }
+        $capture = $matcher['honeypot_name_capture'];
+        if ( empty( $field_match['matches'][$capture] ) ) {
+            continue;
+        }
+        $honeypot_field_id = $field_match['matches'][$capture];
+        $is_known_honeypot_field = isset( $honeypot_field_names[$honeypot_field_id] );
+        $is_honeypot_transient = false;
+        if ( is_scalar( $value ) ) {
+            $random_hash = (string) $value;
+            if ( preg_match( '/^\\d{8,9}$/', $random_hash ) ) {
+                $transient_data = get_transient( $honeypot_field_id . '-' . $random_hash );
+                if ( is_array( $transient_data ) && !empty( $transient_data['expected_hp_name'] ) ) {
+                    $is_honeypot_transient = true;
+                    $ignore_fields[sanitize_key( $transient_data['expected_hp_name'] )] = true;
+                }
+            }
+        }
+        if ( !$is_known_honeypot_field && !$is_honeypot_transient ) {
+            continue;
+        }
+        $ignore_fields[$key] = true;
+        $ignore_fields[$honeypot_field_id] = true;
+    }
+    return $ignore_fields;
+}
+
+/**
+ * Remove generated Honeypot fields before storing or replaying multistep data.
+ */
+function cf7msm_remove_honeypot_fields_from_posted_data(  $posted_data  ) {
+    if ( !is_array( $posted_data ) ) {
+        return $posted_data;
+    }
+    foreach ( cf7msm_get_honeypot_field_names_to_ignore( $posted_data ) as $field_name => $ignore ) {
+        unset($posted_data[$field_name]);
+    }
+    return $posted_data;
 }
 
 /**
@@ -833,6 +1129,7 @@ function cf7msm_add_other_steps_filter(  $cf7_posted_data  ) {
         if ( !is_array( $prev_data ) ) {
             $prev_data = array();
         }
+        $prev_data = cf7msm_remove_honeypot_fields_from_posted_data( $prev_data );
         //remove empty [form] tags from posted_data so $prev_data can be stored.
         $fes = wpcf7_scan_form_tags();
         foreach ( $fes as $fe ) {
@@ -868,6 +1165,7 @@ add_filter( 'wpcf7_posted_data', 'cf7msm_add_other_steps_filter', 9 );
  */
 function cf7msm_store_data_steps() {
     $cf7_posted_data = WPCF7_Submission::get_instance()->get_posted_data();
+    $cf7_posted_data = cf7msm_remove_honeypot_fields_from_posted_data( $cf7_posted_data );
     $is_last_step = false;
     $is_first_step = false;
     if ( empty( $cf7_posted_data['cf7msm-step'] ) && empty( $cf7_posted_data['cf7msm_options'] ) ) {

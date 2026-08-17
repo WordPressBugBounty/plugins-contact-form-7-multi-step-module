@@ -1,16 +1,18 @@
 <?php
 
 /*
-Plugin Name: Contact Form 7 Multi-Step Forms
-Plugin URI: http://www.mymonkeydo.com/contact-form-7-multi-step-module/
-Description: Enables the Contact Form 7 plugin to create multi-page, multi-step forms.
+Plugin Name: Webheadcoder Multi-Step Forms for Contact Form 7
+Plugin URI: https://webheadcoder.com/contact-form-7-multi-step-forms/
+Description: Adds multi-page, multi-step forms to Contact Form 7.
 Requires Plugins:  contact-form-7
 Author: Webhead LLC.
-Author URI: http://webheadcoder.com
-Version: 4.6.2
+Author URI: https://webheadcoder.com/
+Version: 4.7
 Text Domain: contact-form-7-multi-step-module
+License: GPLv2 or later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
 */
-/*  Copyright 2025 Webhead LLC (email: info at webheadcoder.com)
+/*  Copyright 2026 Webhead LLC (email: info at webheadcoder.com)
 
 	This program is free software; you can redistribute it and/or
 	modify it under the terms of the GNU General Public License
@@ -73,7 +75,7 @@ if ( function_exists( 'cf7msm_fs' ) ) {
         cf7msm_fs();
         // Signal that SDK was initiated.
         do_action( 'cf7msm_fs_loaded' );
-        define( 'CF7MSM_VERSION', '4.6.2' );
+        define( 'CF7MSM_VERSION', '4.7' );
         define( 'CF7MSM_PLUGIN', __FILE__ );
         define( 'CF7MSM_FREE_TEXT_PREFIX_RADIO', '_wpcf7_free_text_' );
         define( 'CF7MSM_FREE_TEXT_PREFIX_CHECKBOX', '_wpcf7_free_text_' );
@@ -93,6 +95,7 @@ if ( function_exists( 'cf7msm_fs' ) ) {
             $freemius_link
         ) {
             $limited_time = '';
+            /* translators: %1$s: plugin name; %2$s: Freemius link. */
             return cf7msm_kses( sprintf( __( 'Please help improve the %1$s plugin!  I have chosen to use %2$s to get an idea of how users use my plugin.<br><br>  If you opt-in, the administrator email and some data about your usage of %1$s will be sent to %2$s. If you skip this, that\'s okay! The plugin will still work just fine.', 'contact-form-7-multi-step-module' ), '<strong>' . $plugin_title . '</strong>', $freemius_link ) ) . $limited_time;
         }
 
@@ -103,6 +106,23 @@ if ( function_exists( 'cf7msm_fs' ) ) {
             6
         );
         /**
+         * Send upgrade links off-site while Freemius is in activation mode.
+         *
+         * Freemius only registers the in-dashboard pricing page once the user has opted in
+         * or skipped.  Before that, get_upgrade_url() still returns a link to that page, and
+         * WordPress rejects it with "Sorry, you are not allowed to access this page."  Point
+         * those links at the public pricing page instead until the opt-in has been resolved.
+         *
+         * @param string|null $url Pricing page URL, or null when Freemius is asking whether
+         *                         the pricing menu item should link somewhere custom.
+         * @return string|null
+         */
+        function cf7msm_fs_pricing_url(  $url  ) {
+            return ( cf7msm_fs()->is_activation_mode() ? CF7MSM_LEARN_MORE_URL : $url );
+        }
+
+        cf7msm_fs()->add_filter( 'pricing_url', 'cf7msm_fs_pricing_url' );
+        /**
          * Add account link if paying.
          */
         function cf7msm_plugin_action_links(  $links  ) {
@@ -110,7 +130,7 @@ if ( function_exists( 'cf7msm_fs' ) ) {
                 $links = array();
             }
             if ( cf7msm_fs()->is_not_paying() ) {
-                $links[] = '<a href="' . CF7MSM_LEARN_MORE_URL . '" target="_blank">' . __( 'Learn about PRO' ) . '</a>';
+                $links[] = '<a href="' . esc_url( CF7MSM_LEARN_MORE_URL ) . '" target="_blank">' . esc_html__( 'Learn about PRO', 'contact-form-7-multi-step-module' ) . '</a>';
             }
             return $links;
         }
@@ -135,7 +155,7 @@ if ( function_exists( 'cf7msm_fs' ) ) {
          */
         function cf7msm_plugin_check() {
             $version = get_option( '_cf7msm_version', '' );
-            if ( $version !== CF7MSM_PLUGIN ) {
+            if ( $version !== CF7MSM_VERSION ) {
                 cf7msm_activation();
             }
         }

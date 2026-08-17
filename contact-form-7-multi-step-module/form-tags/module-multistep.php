@@ -17,6 +17,10 @@
 
 */
 
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
+
 /**
  * Initialize this wpcf7 shortcode.
  */
@@ -135,14 +139,17 @@ function cf7msm_multistep_tag_generator( $contact_form, $args = '' ) {
     $args = wp_parse_args( $args, array() );
 ?>
 <header class="description-box">
-	<h3>Multi Step form-tag generator</h3>
+	<h3><?php echo esc_html( __( 'Multi-step form-tag generator', 'contact-form-7-multi-step-module' ) ); ?></h3>
 
-	<p><?php cf7msm_form_tag_header_text( 'Generate a form-tag to enable a multistep form' ); ?></p>
+	<p><?php
+        /* translators: %1$s: link to the plugin page on WordPress.org. */
+        cf7msm_form_tag_header_text( __( 'Generate a form-tag to enable a multistep form. For more details, see %1$s.', 'contact-form-7-multi-step-module' ) );
+    ?></p>
 </header>
 <div class="control-box cf7msm-multistep">
     <input type="hidden" data-tag-part="basetype" value="multistep">
     <fieldset>
-        <legend id="<?php echo esc_attr( $args['content'] . '-name-legend' ); ?>">Field name</legend>
+        <legend id="<?php echo esc_attr( $args['content'] . '-name-legend' ); ?>"><?php echo esc_html( __( 'Field name', 'contact-form-7-multi-step-module' ) ); ?></legend>
         <input type="text" data-tag-part="name" pattern="[A-Za-z][A-Za-z0-9_\-]*" aria-labelledby="<?php echo esc_attr( $args['content'] . '-name-legend' ); ?>">
     </fieldset>
     <fieldset>
@@ -156,37 +163,41 @@ function cf7msm_multistep_tag_generator( $contact_form, $args = '' ) {
     <fieldset>
         <legend id="<?php echo esc_attr( $args['content'] . '-first_step' ); ?>"><?php echo esc_html( __( 'First Step', 'contact-form-7-multi-step-module' ) ); ?></legend>
         <label for="cf7msm-first_step">
-            <input type="checkbox" data-tag-part="option" data-tag-option="first_step" name="first_step" class="option" id="cf7msm-first_step" /> <span class="description"><?php echo esc_html( __( 'Check this if this form is the first step.' ) ) ?></span>
+            <input type="checkbox" data-tag-part="option" data-tag-option="first_step" name="first_step" class="option" id="cf7msm-first_step" /> <span class="description"><?php echo esc_html( __( 'Check this if this form is the first step.', 'contact-form-7-multi-step-module' ) ) ?></span>
         </label>
     </fieldset>
     <fieldset>
         <legend id="<?php echo esc_attr( $args['content'] . '-last_step' ); ?>"><?php echo esc_html( __( 'Last Step', 'contact-form-7-multi-step-module' ) ); ?></legend>
         <label for="cf7msm-last_step">
-            <input type="checkbox" data-tag-part="option" data-tag-option="last_step" id="cf7msm-last_step" /> <span class="description"><?php echo esc_html( __( 'Check this if this form is the last step.' ) ) ?></span>
+            <input type="checkbox" data-tag-part="option" data-tag-option="last_step" id="cf7msm-last_step" /> <span class="description"><?php echo esc_html( __( 'Check this if this form is the last step.', 'contact-form-7-multi-step-module' ) ) ?></span>
         </label>
     </fieldset>
     <fieldset>
         <legend id="<?php echo esc_attr( $args['content'] . '-send_email' ); ?>"><?php echo esc_html( __( 'Send Email', 'contact-form-7-multi-step-module' ) ); ?></legend>
         <label for="cf7msm-send_email">
-            <input type="checkbox" data-tag-part="option" data-tag-option="send_email" id="cf7msm-send_email" /> <span class="description"><?php echo esc_html( __( 'Send email after this form submits.' ) ) ?></span>
+            <input type="checkbox" data-tag-part="option" data-tag-option="send_email" id="cf7msm-send_email" /> <span class="description"><?php echo esc_html( __( 'Send email after this form submits.', 'contact-form-7-multi-step-module' ) ) ?></span>
         </label>
     </fieldset>
     <fieldset>
         <legend id="<?php echo esc_attr( $args['content'] . '-skip_save' ); ?>"><?php echo esc_html( __( 'Skip Save', 'contact-form-7-multi-step-module' ) ); ?></legend>
         <label for="cf7msm-skip_save">
-            <input type="checkbox" data-tag-part="option" data-tag-option="skip_save" name="skip_save" class="option" id="cf7msm-skip_save" /> &nbsp;<span class="description"><?php echo esc_html( __( 'Don\'t save this form to the database (for Flamingo and CFDB7).' ) ) ?></span>
+            <input type="checkbox" data-tag-part="option" data-tag-option="skip_save" name="skip_save" class="option" id="cf7msm-skip_save" /> &nbsp;<span class="description"><?php echo esc_html( __( 'Don\'t save this form to the database (for Flamingo and CFDB7).', 'contact-form-7-multi-step-module' ) ) ?></span>
         </label>
     </fieldset>
     <div class="cf7msm-faq" style="text-align:center;display:none;">
         <?php if ( cf7msm_fs()->is_not_paying() ) : ?>
             <hr>
-        <?php printf( cf7msm_kses( __( '<p><strong>Upgrade to Pro and avoid browser limitations that can cause loss of data.</strong><br><button class="cf7msm-freemius-purchase">Upgrade Now</button><br><a href="%s" target="_blank">See here for more information.</a></p>', 'contact-form-7-multi-step-module' ) ), CF7MSM_LEARN_MORE_URL ); ?>
+            <p>
+                <strong><?php echo esc_html( __( 'Upgrade to Pro and avoid browser limitations that can cause loss of data.', 'contact-form-7-multi-step-module' ) ); ?></strong><br>
+                <a href="<?php echo esc_url( cf7msm_fs()->get_upgrade_url() ); ?>" class="cf7msm-freemius-purchase"><?php echo esc_html( __( 'Upgrade Now', 'contact-form-7-multi-step-module' ) ); ?></a><br>
+                <a href="<?php echo esc_url( CF7MSM_LEARN_MORE_URL ); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html( __( 'See here for more information.', 'contact-form-7-multi-step-module' ) ); ?></a>
+            </p>
         <?php endif; ?>
     </div>
 </div>
 <footer class="insert-box">
     <div class="flex-container">
-        <input type="text" class="code" readonly="readonly" onfocus="this.select();" data-tag-part="tag" aria-label="The form-tag to be inserted into the form template">
+        <input type="text" class="code" readonly="readonly" onfocus="this.select();" data-tag-part="tag" aria-label="<?php echo esc_attr( __( 'The form-tag to be inserted into the form template', 'contact-form-7-multi-step-module' ) ); ?>">
         <button type="button" class="button button-primary" data-taggen="insert-tag"><?php echo esc_html( __( 'Insert Tag', 'contact-form-7-multi-step-module' ) ); ?></button>
         
     </div>
@@ -252,12 +263,15 @@ function cf7msm_multistep_tag_generator_old( $contact_form, $args = '' ) {
 ?>
 <div class="control-box cf7msm-multistep">
     <fieldset>
-        <legend><?php cf7msm_form_tag_header_text( 'Generate a form-tag to enable a multistep form' ); ?></legend>
+        <legend><?php
+            /* translators: %1$s: link to the plugin page on WordPress.org. */
+            cf7msm_form_tag_header_text( __( 'Generate a form-tag to enable a multistep form. For more details, see %1$s.', 'contact-form-7-multi-step-module' ) );
+        ?></legend>
 
         <table class="form-table">
             <tbody>
                 <tr>
-                    <th scope="row"><label for="<?php echo esc_attr( $args['content'] . '-name' ); ?>"><?php echo esc_html( __( 'Name', 'contact-form-7' ) ); ?></label></th>
+                    <th scope="row"><label for="<?php echo esc_attr( $args['content'] . '-name' ); ?>"><?php echo esc_html( __( 'Name', 'contact-form-7-multi-step-module' ) ); ?></label></th>
                     <td><input type="text" name="name" class="tg-name oneline" id="<?php echo esc_attr( $args['content'] . '-name' ); ?>" /><br>
                             </td>
                 </tr>
@@ -265,42 +279,42 @@ function cf7msm_multistep_tag_generator_old( $contact_form, $args = '' ) {
                     <th scope="row"><label for="first_step"><?php echo esc_html( __( 'First Step', 'contact-form-7-multi-step-module' ) ); ?></label>
                     </th>
                     <td><input type="checkbox" name="first_step" class="option" id="first_step" /> &nbsp;
-                        <label for="first_step"><span class="description"><?php echo esc_html( __( 'Check this if this form is the first step.' ) ) ?></span></label>
+                        <label for="first_step"><span class="description"><?php echo esc_html( __( 'Check this if this form is the first step.', 'contact-form-7-multi-step-module' ) ) ?></span></label>
                     </td>
                 </tr>
                 <tr>
                     <th scope="row"><label for="cf7msm-last_step"><?php echo esc_html( __( 'Last Step', 'contact-form-7-multi-step-module' ) ); ?></label>
                     </th>
                     <td><input type="checkbox" name="last_step" class="option" id="cf7msm-last_step" /> &nbsp;
-                        <label for="last_step"><span class="description"><?php echo esc_html( __( 'Check this if this form is the last step.' ) ) ?></span></label>
+                        <label for="last_step"><span class="description"><?php echo esc_html( __( 'Check this if this form is the last step.', 'contact-form-7-multi-step-module' ) ) ?></span></label>
                     </td>
                 </tr>
                 <tr>
                     <th scope="row"><label for="send_email"><?php echo esc_html( __( 'Send Email', 'contact-form-7-multi-step-module' ) ); ?></label>
                     </th>
                     <td><input type="checkbox" name="send_email" class="option" id="send_email" /> &nbsp;
-                        <label for="send_email"><span class="description"><?php echo esc_html( __( 'Send email after this form submits.' ) ) ?></span></label>
+                        <label for="send_email"><span class="description"><?php echo esc_html( __( 'Send email after this form submits.', 'contact-form-7-multi-step-module' ) ) ?></span></label>
                     </td>
                 </tr>
                 <tr>
                     <th scope="row"><label for="skip_save"><?php echo esc_html( __( 'Skip Save', 'contact-form-7-multi-step-module' ) ); ?></label>
                     </th>
                     <td><input type="checkbox" name="skip_save" class="option" id="skip_save" /> &nbsp;
-                        <label for="skip_save"><span class="description"><?php echo esc_html( __( 'Don\'t save this form to the database (for Flamingo and CFDB7).' ) ) ?></span></label>
+                        <label for="skip_save"><span class="description"><?php echo esc_html( __( 'Don\'t save this form to the database (for Flamingo and CFDB7).', 'contact-form-7-multi-step-module' ) ) ?></span></label>
                     </td>
                 </tr>
 
                 <tr><td><br></td></tr>
                 <tr>
                     <th scope="row">
-                        <?php _e('Next Page URL', 'cf7msm'); ?>
+                        <?php echo esc_html( __( 'Next Page URL', 'contact-form-7-multi-step-module' ) ); ?>
                     </th>
                     <td>
                         <input id="tag-generator-panel-next-url" type="text" name="values" class="oneline cf7msm-url" />
                         <br>
                         <label for="tag-generator-panel-next-url">
                             <span class="description"><?php echo esc_html( __( 'The URL of the page that contains the next form.', 'contact-form-7-multi-step-module' ) ) ?><br>
-                                <?php echo esc_html( __( 'This can be blank on the last step.' ) ); ?></span>
+                                <?php echo esc_html( __( 'This can be blank on the last step.', 'contact-form-7-multi-step-module' ) ); ?></span>
                         </label>
                     </td>
                 </tr>
@@ -308,7 +322,13 @@ function cf7msm_multistep_tag_generator_old( $contact_form, $args = '' ) {
         </table>
         <div class="cf7msm-faq" style="display:none;">
             <?php if ( cf7msm_fs()->is_not_paying() ) : ?>
-            <?php printf( cf7msm_kses( __( '<p><strong>Warning:</strong> Your form may be at risk of being too large for the free version of this plugin.<br>If a user submits too much data in the forms you may not get all information.<br><button class="cf7msm-freemius-purchase">Upgrade Now</button><br><a href="%s" target="_blank">See here for more information.</a></p>', 'contact-form-7-multi-step-module' ) ), CF7MSM_LEARN_MORE_URL ); ?>
+                <p>
+                    <strong><?php echo esc_html( __( 'Warning:', 'contact-form-7-multi-step-module' ) ); ?></strong>
+                    <?php echo esc_html( __( 'Your form may be at risk of being too large for the free version of this plugin.', 'contact-form-7-multi-step-module' ) ); ?><br>
+                    <?php echo esc_html( __( 'If a user submits too much data in the forms you may not get all information.', 'contact-form-7-multi-step-module' ) ); ?><br>
+                    <a href="<?php echo esc_url( cf7msm_fs()->get_upgrade_url() ); ?>" class="cf7msm-freemius-purchase"><?php echo esc_html( __( 'Upgrade Now', 'contact-form-7-multi-step-module' ) ); ?></a><br>
+                    <a href="<?php echo esc_url( CF7MSM_LEARN_MORE_URL ); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html( __( 'See here for more information.', 'contact-form-7-multi-step-module' ) ); ?></a>
+                </p>
             <?php endif; ?>
         </div>
     </fieldset>

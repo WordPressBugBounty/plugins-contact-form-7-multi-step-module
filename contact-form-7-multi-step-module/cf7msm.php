@@ -4,17 +4,12 @@ if ( !defined( 'ABSPATH' ) ) {
     exit;
 }
 /**
- * Load text domain for translations
- */
-add_action( 'init', 'cf7msm_load_textdomain' );
-function cf7msm_load_textdomain() {
-    load_plugin_textdomain( 'contact-form-7-multi-step-module', false, dirname( plugin_basename( __FILE__ ) ) . '/languages' );
-}
-
-/**
  * Print a warning if cf7 not installed or activated.
+ *
+ * Translations are loaded automatically by WordPress.org since WordPress 4.6,
+ * so load_plugin_textdomain() is intentionally omitted.
  */
-function contact_form_7_form_codes() {
+function cf7msm_contact_form_7_form_codes() {
     global $pagenow;
     if ( $pagenow != 'plugins.php' ) {
         return;
@@ -22,26 +17,28 @@ function contact_form_7_form_codes() {
     if ( defined( 'WPCF7_VERSION' ) && version_compare( WPCF7_VERSION, CF7MSM_MIN_CF7_VERSION ) >= 0 ) {
         return;
     }
-    add_action( 'admin_notices', 'cfformfieldserror' );
-    function cfformfieldserror() {
+    add_action( 'admin_notices', 'cf7msm_form_fields_error' );
+    function cf7msm_form_fields_error() {
         wp_enqueue_script( 'thickbox' );
         $out = '<div class="error" id="messages"><p>';
         if ( defined( 'WPCF7_VERSION' ) && version_compare( WPCF7_VERSION, CF7MSM_MIN_CF7_VERSION ) < 0 ) {
-            $out .= sprintf( __( 'Please update the Contact Form 7 plugin.  Contact Form 7 Multi-Step Form plugin requires Contact Form 7 version %s or above.', 'contact-form-7-multi-step-module' ), CF7MSM_MIN_CF7_VERSION );
+            /* translators: %1$s: minimum required Contact Form 7 version. */
+            $out .= sprintf( __( 'Please update Contact Form 7. Webheadcoder Multi-Step Forms for Contact Form 7 requires Contact Form 7 version %1$s or later.', 'contact-form-7-multi-step-module' ), CF7MSM_MIN_CF7_VERSION );
         } else {
             if ( file_exists( WP_PLUGIN_DIR . '/contact-form-7/wp-contact-form-7.php' ) ) {
-                $out .= __( 'The Contact Form 7 plugin is installed, but <strong>you must activate Contact Form 7</strong> below for the Contact Form 7 Multi-Step Form to work.', 'contact-form-7-multi-step-module' );
+                $out .= __( 'Contact Form 7 is installed, but <strong>you must activate Contact Form 7</strong> below for Webheadcoder Multi-Step Forms for Contact Form 7 to work.', 'contact-form-7-multi-step-module' );
             } else {
-                $out .= sprintf( __( 'The Contact Form 7 plugin must be installed for the Contact Form 7 Multi-Step Form to work. <a href="%s" class="thickbox" title="Contact Form 7">Install Now.</a>', 'contact-form-7-multi-step-module' ), admin_url( 'plugin-install.php?tab=plugin-information&plugin=contact-form-7&from=plugins&TB_iframe=true&width=600&height=550' ) );
+                /* translators: %1$s: URL of the Contact Form 7 installation screen. */
+                $out .= sprintf( __( 'Contact Form 7 must be installed for Webheadcoder Multi-Step Forms for Contact Form 7 to work. <a href="%1$s" class="thickbox" title="Contact Form 7">Install Now.</a>', 'contact-form-7-multi-step-module' ), esc_url( admin_url( 'plugin-install.php?tab=plugin-information&plugin=contact-form-7&from=plugins&TB_iframe=true&width=600&height=550' ) ) );
             }
         }
         $out .= '</p></div>';
-        echo cf7msm_kses( $out );
+        echo wp_kses_post( $out );
     }
 
 }
 
-add_action( 'plugins_loaded', 'contact_form_7_form_codes', 10 );
+add_action( 'plugins_loaded', 'cf7msm_contact_form_7_form_codes', 10 );
 /**
  * Allow a set of default html tags
  */
@@ -77,38 +74,63 @@ function cf7msm_url(  $path  ) {
 }
 
 /**
- * init_sessions()
+ * Start a PHP session only when plugin state is being written, or resume an
+ * incoming session when plugin state is being read or removed.
  *
- * @uses session_id()
- * @uses session_start()
+ * @param bool $create_for_write Whether a new session may be created.
+ * @return bool Whether a PHP session is active.
  */
-function cf7msm_init_sessions() {
+function cf7msm_activate_php_session(  $create_for_write = false  ) {
     if ( defined( 'DOING_CRON' ) && DOING_CRON ) {
-        // this is not needed during cron.
-        return;
+        return false;
     }
-    //try to set cookie
-    if ( empty( $_COOKIE['cf7msm_check'] ) ) {
-        $force_session = apply_filters( 'cf7msm_force_session', false );
-        $allow_session = apply_filters( 'cf7msm_allow_session', $force_session );
-        if ( $allow_session ) {
-            if ( !$force_session ) {
-                setcookie(
-                    'cf7msm_check',
-                    1,
-                    0,
-                    COOKIEPATH,
-                    COOKIE_DOMAIN
-                );
-            }
-            if ( !session_id() ) {
-                session_start();
-            }
+    $force_session = apply_filters( 'cf7msm_force_session', false );
+    $allow_session = apply_filters( 'cf7msm_allow_session', $force_session );
+    if ( !$allow_session || !empty( $_COOKIE['cf7msm_check'] ) ) {
+        return false;
+    }
+    // Probe for working cookies on the first real write, then use the normal
+    // JSON-cookie path immediately when sessions were allowed but not forced.
+    if ( $create_for_write && !$force_session ) {
+        if ( !headers_sent() ) {
+            setcookie(
+                'cf7msm_check',
+                1,
+                0,
+                COOKIEPATH,
+                COOKIE_DOMAIN
+            );
         }
+        return false;
     }
+    if ( PHP_SESSION_ACTIVE === session_status() ) {
+        return true;
+    }
+    $session_name = session_name();
+    $has_incoming_id = is_string( $session_name ) && '' !== $session_name && !empty( $_COOKIE[$session_name] );
+    if ( !$create_for_write && !$has_incoming_id ) {
+        return false;
+    }
+    if ( headers_sent() ) {
+        return false;
+    }
+    if ( !$force_session ) {
+        setcookie(
+            'cf7msm_check',
+            1,
+            0,
+            COOKIEPATH,
+            COOKIE_DOMAIN
+        );
+    }
+    try {
+        $started = @session_start();
+    } catch ( Throwable $error ) {
+        $started = false;
+    }
+    return $started && PHP_SESSION_ACTIVE === session_status();
 }
 
-add_action( 'init', 'cf7msm_init_sessions' );
 /**
  * Check for user-specific multi-step state cookies.
  */
@@ -164,19 +186,19 @@ add_action( 'wp_enqueue_scripts', 'cf7msm_scripts' );
  *  Saves a variable to cookies or if not enabled, to session.
  */
 function cf7msm_set(  $var_name, $var_value  ) {
-    $force_session = apply_filters( 'cf7msm_force_session', false );
-    $allow_session = apply_filters( 'cf7msm_allow_session', $force_session );
     $var_value = wp_unslash( $var_value );
-    if ( $allow_session && empty( $_COOKIE['cf7msm_check'] ) ) {
+    if ( cf7msm_activate_php_session( true ) ) {
         $_SESSION[$var_name] = $var_value;
+        return;
+    }
+    $json_encoded = '';
+    //for php < 5.4
+    if ( defined( 'JSON_UNESCAPED_UNICODE' ) ) {
+        $json_encoded = json_encode( $var_value, JSON_UNESCAPED_UNICODE );
     } else {
-        $json_encoded = '';
-        //for php < 5.4
-        if ( defined( 'JSON_UNESCAPED_UNICODE' ) ) {
-            $json_encoded = json_encode( $var_value, JSON_UNESCAPED_UNICODE );
-        } else {
-            $json_encoded = json_encode( $var_value );
-        }
+        $json_encoded = json_encode( $var_value );
+    }
+    if ( !headers_sent() ) {
         setcookie(
             $var_name,
             $json_encoded,
@@ -192,14 +214,17 @@ function cf7msm_set(  $var_name, $var_value  ) {
  */
 function cf7msm_get(  $var_name, $default = ''  ) {
     $ret = $default;
-    $force_session = apply_filters( 'cf7msm_force_session', false );
-    $allow_session = apply_filters( 'cf7msm_allow_session', $force_session );
-    if ( $allow_session && empty( $_COOKIE['cf7msm_check'] ) ) {
+    if ( cf7msm_activate_php_session( false ) ) {
+        // $_SESSION values are stored by cf7msm_set(), which already unslashes them,
+        // so they are only sanitized here (no request unslashing needed).
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized via cf7msm_sanitize_posted_data().
         $ret = ( isset( $_SESSION[$var_name] ) ? cf7msm_sanitize_posted_data( $_SESSION[$var_name] ) : $default );
     } else {
-        $ret = ( isset( $_COOKIE[$var_name] ) ? cf7msm_sanitize_posted_data( $_COOKIE[$var_name] ) : $default );
+        // Cookie values are unslashed then sanitized via cf7msm_sanitize_posted_data().
+        // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- Sanitized via cf7msm_sanitize_posted_data().
+        $ret = ( isset( $_COOKIE[$var_name] ) ? cf7msm_sanitize_posted_data( wp_unslash( $_COOKIE[$var_name] ) ) : $default );
         if ( is_string( $ret ) ) {
-            $ret = json_decode( wp_unslash( $ret ), true );
+            $ret = json_decode( $ret, true );
         }
     }
     // Conditional Fields plugin throws 500 error when these aren't set.
@@ -218,13 +243,161 @@ function cf7msm_get(  $var_name, $default = ''  ) {
 }
 
 /**
+ * Convert a multistep form-tag's saved configuration to canonical options.
+ */
+function cf7msm_get_multistep_tag_options(  $tag  ) {
+    $options = array();
+    $supported_options = array(
+        'first_step',
+        'last_step',
+        'send_email',
+        'skip_save'
+    );
+    if ( !empty( $tag->options ) && is_array( $tag->options ) ) {
+        foreach ( $supported_options as $option ) {
+            if ( in_array( $option, $tag->options, true ) ) {
+                $options[$option] = 1;
+            }
+        }
+    }
+    if ( !empty( $tag->values ) && is_array( $tag->values ) ) {
+        $next_url = (string) reset( $tag->values );
+        if ( '' !== $next_url ) {
+            $options['next_url'] = $next_url;
+        }
+    }
+    return $options;
+}
+
+/**
+ * Normalize client options to the subset supported by saved multistep tags.
+ */
+function cf7msm_normalize_multistep_options(  $options  ) {
+    if ( is_string( $options ) ) {
+        $options = json_decode( stripslashes( $options ), true );
+    }
+    if ( !is_array( $options ) ) {
+        return null;
+    }
+    $normalized = array();
+    foreach ( array(
+        'first_step',
+        'last_step',
+        'send_email',
+        'skip_save'
+    ) as $option ) {
+        if ( !empty( $options[$option] ) ) {
+            $normalized[$option] = 1;
+        }
+    }
+    if ( isset( $options['next_url'] ) && is_scalar( $options['next_url'] ) && '' !== (string) $options['next_url'] ) {
+        $normalized['next_url'] = (string) $options['next_url'];
+    }
+    return $normalized;
+}
+
+/**
+ * Resolve new-format multistep options against the saved CF7 form.
+ *
+ * A single saved tag is always authoritative. Multiple tags are used by the
+ * conditional-steps integration, so the submitted selection must exactly
+ * match one of the configurations saved on the form.
+ */
+function cf7msm_resolve_multistep_config(  $wpcf7, $posted_data = array()  ) {
+    $ret = array(
+        'has_new_tag' => false,
+        'is_valid'    => false,
+        'options'     => array(),
+        'tag'         => null,
+    );
+    if ( !is_object( $wpcf7 ) || !method_exists( $wpcf7, 'scan_form_tags' ) ) {
+        return $ret;
+    }
+    $tags = $wpcf7->scan_form_tags( array(
+        'type' => array('multistep'),
+    ) );
+    $candidates = array();
+    foreach ( (array) $tags as $tag ) {
+        if ( empty( $tag->name ) ) {
+            continue;
+        }
+        $candidates[] = array(
+            'options' => cf7msm_get_multistep_tag_options( $tag ),
+            'tag'     => $tag,
+        );
+    }
+    if ( empty( $candidates ) ) {
+        return $ret;
+    }
+    $ret['has_new_tag'] = true;
+    if ( 1 === count( $candidates ) ) {
+        $ret['is_valid'] = true;
+        $ret['options'] = $candidates[0]['options'];
+        $ret['tag'] = $candidates[0]['tag'];
+        return $ret;
+    }
+    $submitted_options = ( isset( $posted_data['cf7msm_options'] ) ? cf7msm_normalize_multistep_options( $posted_data['cf7msm_options'] ) : null );
+    foreach ( $candidates as $candidate ) {
+        if ( null !== $submitted_options && $candidate['options'] === $submitted_options ) {
+            $ret['is_valid'] = true;
+            $ret['options'] = $candidate['options'];
+            $ret['tag'] = $candidate['tag'];
+            return $ret;
+        }
+    }
+    // Keep a real tag as validation context when the selection is ambiguous.
+    $ret['tag'] = $candidates[0]['tag'];
+    return $ret;
+}
+
+/**
+ * Read the canonical step value from a saved legacy-format form.
+ */
+function cf7msm_get_saved_legacy_step(  $wpcf7  ) {
+    if ( !is_object( $wpcf7 ) || !method_exists( $wpcf7, 'prop' ) ) {
+        return '';
+    }
+    $formstring = $wpcf7->prop( 'form' );
+    if ( preg_match( '/\\[multistep\\s+"(\\d+)-(\\d+)(?:-[^"]*)?"[^\\]]*\\]/', $formstring, $matches ) || preg_match( '/\\[hidden\\s+cf7msm-step\\s+"(\\d+)-(\\d+)"[^\\]]*\\]/', $formstring, $matches ) ) {
+        return $matches[1] . '-' . $matches[2];
+    }
+    return '';
+}
+
+/**
+ * Replace client-supplied multistep metadata with saved form configuration.
+ */
+function cf7msm_canonicalize_posted_multistep(  $posted_data  ) {
+    $wpcf7 = WPCF7_ContactForm::get_current();
+    $config = cf7msm_resolve_multistep_config( $wpcf7, $posted_data );
+    unset($posted_data['_cf7msm_invalid_options']);
+    if ( $config['has_new_tag'] ) {
+        unset($posted_data['cf7msm-step']);
+        if ( $config['is_valid'] ) {
+            $posted_data['cf7msm_options'] = wp_json_encode( $config['options'] );
+        } else {
+            unset($posted_data['cf7msm_options']);
+            $posted_data['_cf7msm_invalid_options'] = 1;
+        }
+        return $posted_data;
+    }
+    $legacy_step = cf7msm_get_saved_legacy_step( $wpcf7 );
+    if ( '' !== $legacy_step ) {
+        $posted_data['cf7msm-step'] = $legacy_step;
+        unset($posted_data['cf7msm_options']);
+        return $posted_data;
+    }
+    // Request fields must not turn an ordinary CF7 form into a multistep form.
+    unset($posted_data['cf7msm-step'], $posted_data['cf7msm_options']);
+    return $posted_data;
+}
+
+add_filter( 'wpcf7_posted_data', 'cf7msm_canonicalize_posted_multistep', 8 );
+/**
  * Remove a saved variable.
  */
 function cf7msm_remove(  $var_name  ) {
-    $ret = '';
-    $force_session = apply_filters( 'cf7msm_force_session', false );
-    $allow_session = apply_filters( 'cf7msm_allow_session', $force_session );
-    if ( $allow_session && empty( $_COOKIE['cf7msm_check'] ) ) {
+    if ( cf7msm_activate_php_session( false ) ) {
         if ( isset( $_SESSION[$var_name] ) ) {
             unset($_SESSION[$var_name]);
         }
@@ -336,14 +509,20 @@ function cf7msm_get_pipe_form_tags(  $wpcf7 = null  ) {
  * Get raw request values for a field key and its array variant.
  */
 function cf7msm_get_request_value_for_field(  $field_name, &$has_value  ) {
+    // Nonce verification is handled by Contact Form 7 before this runs; values are
+    // unslashed and sanitized via cf7msm_sanitize_posted_data().
     $has_value = false;
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing -- CF7 verifies the submission nonce.
     if ( isset( $_POST[$field_name] ) ) {
         $has_value = true;
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- CF7 verifies the nonce; sanitized via cf7msm_sanitize_posted_data().
         return cf7msm_sanitize_posted_data( wp_unslash( $_POST[$field_name] ) );
     }
     $array_field_name = $field_name . '[]';
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing -- CF7 verifies the submission nonce.
     if ( isset( $_POST[$array_field_name] ) ) {
         $has_value = true;
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- CF7 verifies the nonce; sanitized via cf7msm_sanitize_posted_data().
         return cf7msm_sanitize_posted_data( wp_unslash( $_POST[$array_field_name] ) );
     }
     return '';
@@ -392,15 +571,19 @@ function cf7msm_set_posted_value_for_field(  &$posted_data, $field_name, $value 
  * Get free-text request value for a radio/checkbox field.
  */
 function cf7msm_get_request_free_text_for_field(  $field_name  ) {
-    $free_text_field_name = CF7MSM_FREE_TEXT_PREFIX_RADIO . $field_name;
-    if ( !isset( $_POST[$free_text_field_name] ) ) {
-        return '';
+    $free_text_field_names = array($field_name . '_free_text', CF7MSM_FREE_TEXT_PREFIX_RADIO . $field_name);
+    foreach ( array_unique( $free_text_field_names ) as $free_text_field_name ) {
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- CF7 verifies the submission nonce.
+        if ( !isset( $_POST[$free_text_field_name] ) ) {
+            continue;
+        }
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing,WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- CF7 verifies the nonce; sanitized via cf7msm_sanitize_posted_data().
+        $free_text_value = cf7msm_sanitize_posted_data( wp_unslash( $_POST[$free_text_field_name] ) );
+        if ( is_string( $free_text_value ) ) {
+            return trim( $free_text_value );
+        }
     }
-    $free_text_value = cf7msm_sanitize_posted_data( wp_unslash( $_POST[$free_text_field_name] ) );
-    if ( !is_string( $free_text_value ) ) {
-        return '';
-    }
-    return trim( $free_text_value );
+    return '';
 }
 
 /**
@@ -756,21 +939,45 @@ function cf7msm_pipe_generate_flow_id() {
 }
 
 /**
+ * Keep the server-selected flow id available for the current request.
+ *
+ * setcookie() does not update $_COOKIE, so this prevents a stale client value
+ * from taking precedence later in the same request.
+ */
+function cf7msm_current_pipe_flow_id(  $flow_id = null  ) {
+    static $current_flow_id = '';
+    if ( null !== $flow_id ) {
+        $current_flow_id = ( cf7msm_is_valid_pipe_flow_id( $flow_id ) ? $flow_id : '' );
+    }
+    return $current_flow_id;
+}
+
+/**
  * Get the current flow id (create one when requested).
  */
 function cf7msm_get_pipe_flow_id(  $create = false  ) {
-    $posted_flow_id = cf7msm_get_pipe_flow_id_from_posted_data();
-    if ( !empty( $posted_flow_id ) ) {
-        return $posted_flow_id;
+    $flow_id = cf7msm_current_pipe_flow_id();
+    if ( !empty( $flow_id ) ) {
+        return $flow_id;
     }
     $flow_id = cf7msm_get( 'cf7msm_pipe_flow_id', '' );
-    if ( cf7msm_is_valid_pipe_flow_id( $flow_id ) ) {
+    if ( cf7msm_is_valid_pipe_flow_id( $flow_id ) && false !== get_transient( 'cf7msm_pipe_store_' . $flow_id ) ) {
+        cf7msm_current_pipe_flow_id( $flow_id );
         return $flow_id;
+    }
+    // Only accept a client-carried id for an existing server-side flow. This
+    // preserves cookie-less continuation without allowing arbitrary ids to
+    // create new transient rows.
+    $posted_flow_id = cf7msm_get_pipe_flow_id_from_posted_data();
+    if ( !empty( $posted_flow_id ) && false !== get_transient( 'cf7msm_pipe_store_' . $posted_flow_id ) ) {
+        cf7msm_current_pipe_flow_id( $posted_flow_id );
+        return $posted_flow_id;
     }
     if ( !$create ) {
         return '';
     }
     $flow_id = cf7msm_pipe_generate_flow_id();
+    cf7msm_current_pipe_flow_id( $flow_id );
     cf7msm_set( 'cf7msm_pipe_flow_id', $flow_id );
     return $flow_id;
 }
@@ -780,6 +987,7 @@ function cf7msm_get_pipe_flow_id(  $create = false  ) {
  */
 function cf7msm_reset_pipe_flow_id() {
     $flow_id = cf7msm_pipe_generate_flow_id();
+    cf7msm_current_pipe_flow_id( $flow_id );
     cf7msm_set( 'cf7msm_pipe_flow_id', $flow_id );
     return $flow_id;
 }
@@ -912,7 +1120,16 @@ function cf7msm_map_pipe_value_for_mail(  $field_name, $submitted, $pipe_store  
  * Format a mapped value using CF7's default mail-tag formatting rules.
  */
 function cf7msm_format_mail_tag_value(  $value, $html  ) {
-    $separator = ( 'body' === WPCF7_Mail::get_current_component_name() ? wp_get_list_item_separator() : ', ' );
+    // Match Contact Form 7's default mail formatting. wp_get_list_item_separator()
+    // is locale-aware but only exists in WordPress 6.0+, so it stays guarded to
+    // preserve the plugin's minimum supported WordPress version (4.7).
+    $separator = ', ';
+    if ( 'body' === WPCF7_Mail::get_current_component_name() ) {
+        if ( function_exists( 'wp_get_list_item_separator' ) ) {
+            $separator = wp_get_list_item_separator();
+        }
+    }
+    $separator = apply_filters( 'cf7msm_list_item_separator', $separator );
     $value = wpcf7_flat_join( $value, array(
         'separator' => $separator,
     ) );
@@ -946,7 +1163,7 @@ function cf7msm_replace_pipe_value_for_mail_tag(
     if ( empty( $posted_data['cf7msm-step'] ) && empty( $posted_data['cf7msm_options'] ) ) {
         return $replaced;
     }
-    $flow_id = cf7msm_get_pipe_flow_id_from_posted_data( $posted_data );
+    $flow_id = cf7msm_get_pipe_flow_id();
     if ( empty( $flow_id ) ) {
         return $replaced;
     }
@@ -1001,6 +1218,10 @@ function cf7msm_step_2(  $cf7  ) {
     $form_id = '';
     $using_new = false;
     $is_invalid = false;
+    $is_post_request = isset( $_SERVER['REQUEST_METHOD'] ) && 'POST' === strtoupper( sanitize_text_field( wp_unslash( $_SERVER['REQUEST_METHOD'] ) ) );
+    $is_rest_request = defined( 'REST_REQUEST' ) && REST_REQUEST;
+    // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Only detecting a CF7 submission; CF7 verifies its own nonce.
+    $is_submission = $is_post_request && ($is_rest_request || !empty( $_POST['_wpcf7'] ));
     if ( $has_wpcf7_class ) {
         $formstring = $cf7->prop( 'form' );
         $form_id = $cf7->id();
@@ -1038,12 +1259,15 @@ function cf7msm_step_2(  $cf7  ) {
     if ( !is_admin() && (preg_match( '/\\[multistep "(\\d+)-(\\d+)-?(.*)"\\]/', $formstring, $matches ) || preg_match( '/\\[hidden cf7msm-step "(\\d+)-(\\d+)"\\]/', $formstring, $matches )) ) {
         // don't support using both new and old format
         if ( $using_new ) {
-            if ( $has_wpcf7_class ) {
-                $cf7->set_properties( array(
-                    'form' => apply_filters( 'cf7msm_error_invalid_format', __( 'Error: This form is using two different formats of the multistep tag.' ), $form_id ),
-                ) );
-            } else {
-                $cf7->form = apply_filters( 'cf7msm_error_invalid_format', __( 'Error: This form is using two different formats of the multistep tag.' ), $form_id );
+            if ( !$is_submission ) {
+                $invalid_format_message = esc_html__( 'Error: This form is using two different formats of the multistep tag.', 'contact-form-7-multi-step-module' );
+                if ( $has_wpcf7_class ) {
+                    $cf7->set_properties( array(
+                        'form' => apply_filters( 'cf7msm_error_invalid_format', $invalid_format_message, $form_id ),
+                    ) );
+                } else {
+                    $cf7->form = apply_filters( 'cf7msm_error_invalid_format', $invalid_format_message, $form_id );
+                }
             }
             return $cf7;
         }
@@ -1068,19 +1292,31 @@ function cf7msm_step_2(  $cf7  ) {
             $is_invalid = true;
         }
     }
-    if ( $is_invalid ) {
+    if ( $is_invalid && !$is_submission ) {
         if ( $has_wpcf7_class ) {
             $cf7->set_properties( array(
-                'form' => apply_filters( 'wh_hide_cf7_step_message', $cf7->message( 'invalid_first_step' ), $form_id ),
+                'form' => cf7msm_hide_cf7_step_message( $cf7->message( 'invalid_first_step' ), $form_id ),
             ) );
         } else {
-            $cf7->form = apply_filters( 'wh_hide_cf7_step_message', $cf7->message( 'invalid_first_step' ), $form_id );
+            $cf7->form = cf7msm_hide_cf7_step_message( $cf7->message( 'invalid_first_step' ), $form_id );
         }
     }
     return $cf7;
 }
 
 add_action( 'wpcf7_contact_form', 'cf7msm_step_2' );
+/**
+ * Filter the message shown when a multistep step is accessed out of order.
+ */
+function cf7msm_hide_cf7_step_message(  $message, $form_id  ) {
+    $message = apply_filters( 'cf7msm_hide_cf7_step_message', $message, $form_id );
+    // Backwards compatibility with the original, unprefixed filter name. Applied
+    // unconditionally so callbacks registered at any priority (including 0) run.
+    // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- Retained for backward compatibility with existing integrations.
+    $message = apply_filters( 'wh_hide_cf7_step_message', $message, $form_id );
+    return $message;
+}
+
 /**
  * Handle a multi-step cf7 form for cf7 3.9+
  */
@@ -1145,6 +1381,10 @@ function cf7msm_add_other_steps_filter(  $cf7_posted_data  ) {
             } else {
                 if ( strpos( $key, CF7MSM_FREE_TEXT_PREFIX_CHECKBOX ) === 0 ) {
                     $free_text_keys[$key] = str_replace( CF7MSM_FREE_TEXT_PREFIX_CHECKBOX, '', $key );
+                } else {
+                    if ( substr( $key, -10 ) === '_free_text' ) {
+                        $free_text_keys[$key] = substr( $key, 0, -10 );
+                    }
                 }
             }
         }
@@ -1180,18 +1420,9 @@ function cf7msm_store_data_steps() {
             $is_first_step = !empty( $matches[1] ) && intval( $matches[1] ) === 1;
         }
     }
-    $flow_id = '';
     if ( $is_first_step ) {
-        $flow_id = cf7msm_get_pipe_flow_id_from_posted_data( $cf7_posted_data );
-        if ( empty( $flow_id ) ) {
-            $flow_id = cf7msm_reset_pipe_flow_id();
-        } else {
-            cf7msm_set( 'cf7msm_pipe_flow_id', $flow_id );
-        }
+        $flow_id = cf7msm_reset_pipe_flow_id();
     } else {
-        $flow_id = cf7msm_get_pipe_flow_id_from_posted_data( $cf7_posted_data );
-    }
-    if ( empty( $flow_id ) ) {
         $flow_id = cf7msm_get_pipe_flow_id( true );
     }
     if ( !empty( $flow_id ) ) {
@@ -1200,6 +1431,7 @@ function cf7msm_store_data_steps() {
     cf7msm_store_pipe_data( $cf7_posted_data, $flow_id );
     $use_cookies = true;
     if ( $use_cookies ) {
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- Runs during wpcf7_before_send_mail; CF7 has already verified the submission.
         $free_texts_lengths = array_filter( $_POST, function ( $key ) {
             return strpos( $key, '_cf7msm_free_text_reflen_' ) === 0;
         }, ARRAY_FILTER_USE_KEY );
@@ -1220,21 +1452,18 @@ add_action( 'wpcf7_before_send_mail', 'cf7msm_store_data_steps' );
  */
 function cf7msm_skip_send_mail(  $skip_mail, $wpcf7  ) {
     $posted_data = WPCF7_Submission::get_instance()->get_posted_data();
-    if ( !empty( $posted_data['cf7msm_options'] ) ) {
-        $skip_mail = true;
-        $options = json_decode( stripslashes( $posted_data['cf7msm_options'] ), true );
-        if ( !empty( $options['send_email'] ) ) {
-            $skip_mail = false;
+    $config = cf7msm_resolve_multistep_config( $wpcf7, $posted_data );
+    if ( $config['has_new_tag'] ) {
+        if ( !$config['is_valid'] || empty( $config['options']['send_email'] ) ) {
+            return true;
         }
-    } else {
-        $step_string = parse_form_for_multistep( $wpcf7, true );
-        if ( !empty( $step_string ) ) {
-            $steps = explode( '-', $step_string );
-            $curr_step = $steps[0];
-            $last_step = $steps[1];
-            if ( $curr_step != $last_step ) {
-                $skip_mail = true;
-            }
+        return $skip_mail;
+    }
+    $step_string = cf7msm_get_saved_legacy_step( $wpcf7 );
+    if ( !empty( $step_string ) ) {
+        $steps = explode( '-', $step_string );
+        if ( $steps[0] != $steps[1] ) {
+            return true;
         }
     }
     return $skip_mail;
@@ -1251,11 +1480,35 @@ add_filter(
  */
 function cf7msm_set_step(  $result, $tags  ) {
     $posted_data = WPCF7_Submission::get_instance()->get_posted_data();
+    $wpcf7 = WPCF7_ContactForm::get_current();
+    $config = cf7msm_resolve_multistep_config( $wpcf7, $posted_data );
+    if ( $config['has_new_tag'] ) {
+        $is_first_step = $config['is_valid'] && !empty( $config['options']['first_step'] );
+        $missing_previous_step = !$is_first_step && empty( cf7msm_get( 'cf7msm-first-step' ) );
+        if ( !$config['is_valid'] || $missing_previous_step ) {
+            $result->invalidate( $config['tag'], $wpcf7->message( 'invalid_first_step' ) );
+        } else {
+            if ( $result->is_valid() ) {
+                cf7msm_set( 'cf7msm-first-step', 1 );
+            }
+        }
+        return $result;
+    }
     if ( !empty( $posted_data['cf7msm-step'] ) ) {
         $step = $posted_data['cf7msm-step'];
         if ( preg_match( '/(\\d+)-(\\d+)/', $step, $matches ) ) {
             $curr_step = $matches[1];
             $last_step = $matches[2];
+            $stored_step = cf7msm_get( 'cf7msm-step' );
+            $missing_previous_step = 1 !== intval( $curr_step ) && (empty( $stored_step ) || intval( $stored_step ) + 1 < intval( $curr_step ));
+            if ( $missing_previous_step ) {
+                $result->invalidate( array(
+                    'type'     => 'hidden',
+                    'basetype' => 'hidden',
+                    'name'     => 'cf7msm-step',
+                ), $wpcf7->message( 'invalid_first_step' ) );
+                return $result;
+            }
             if ( $result->is_valid() ) {
                 if ( $curr_step != $last_step ) {
                     cf7msm_set( 'cf7msm-step', $curr_step );
@@ -1266,13 +1519,6 @@ function cf7msm_set_step(  $result, $tags  ) {
                     //reduce it so user cannot move onto next step.
                     cf7msm_set( 'cf7msm-step', intval( $curr_step ) - 1 );
                 }
-            }
-        }
-    } else {
-        if ( !empty( $posted_data['cf7msm_options'] ) ) {
-            $options = json_decode( stripslashes( $posted_data['cf7msm_options'] ), true );
-            if ( !empty( $options['first_step'] ) ) {
-                cf7msm_set( 'cf7msm-first-step', 1 );
             }
         }
     }
@@ -1318,7 +1564,7 @@ function cf7msm_mail_sent() {
                 // redirect when ajax is disabled and not doing rest and not doing ajax
                 if ( !(defined( 'REST_REQUEST' ) && REST_REQUEST) && !(defined( 'DOING_AJAX' ) && DOING_AJAX) ) {
                     //get url from saved form, not $_POST.  be safe.
-                    $no_ajax_redirect_url = parse_form_for_multistep( $wpcf7 );
+                    $no_ajax_redirect_url = cf7msm_parse_form_for_multistep( $wpcf7 );
                 }
             }
         }
@@ -1331,10 +1577,7 @@ function cf7msm_mail_sent() {
         $count = ( !empty( $stats['count'] ) ? $stats['count'] : 0 );
         $stats['count'] = 1 + $count;
         update_option( '_cf7msm_stats', $stats );
-        $flow_id = cf7msm_get_pipe_flow_id_from_posted_data( $posted_data );
-        if ( empty( $flow_id ) ) {
-            $flow_id = cf7msm_get_pipe_flow_id();
-        }
+        $flow_id = cf7msm_get_pipe_flow_id();
         cf7msm_delete_pipe_store( $flow_id );
         cf7msm_remove( 'cf7msm-step' );
         cf7msm_remove( 'cf7msm_posted_data' );
@@ -1356,7 +1599,17 @@ function cf7msm_mail_sent() {
         }
         $no_ajax_redirect_url = apply_filters( 'cf7msm_redirect_url', $no_ajax_redirect_url, $wpcf7->id() );
         if ( !empty( $no_ajax_redirect_url ) ) {
-            wp_redirect( esc_url( $no_ajax_redirect_url ) );
+            // The next-page URL is a site-owner setting and may point to another
+            // host (documented support). Allow that host through wp_safe_redirect()'s
+            // validation instead of falling back to wp-admin.
+            $redirect_host = wp_parse_url( $no_ajax_redirect_url, PHP_URL_HOST );
+            if ( !empty( $redirect_host ) ) {
+                add_filter( 'allowed_redirect_hosts', function ( $hosts ) use($redirect_host) {
+                    $hosts[] = $redirect_host;
+                    return $hosts;
+                } );
+            }
+            wp_safe_redirect( esc_url_raw( $no_ajax_redirect_url ) );
             exit;
         }
     }
@@ -1367,7 +1620,7 @@ add_action( 'wpcf7_mail_sent', 'cf7msm_mail_sent' );
  * Go through a wpcf7 form's formstring and find the multistep url.
  * If $steps is true, return the steps part as "<curr>-<total>", otherwise return the url.
  */
-function parse_form_for_multistep(  $wpcf7, $steps = false  ) {
+function cf7msm_parse_form_for_multistep(  $wpcf7, $steps = false  ) {
     $formstring = $wpcf7->prop( 'form' );
     if ( preg_match( '/\\[multistep "(\\d+)-(\\d+)-(.+)"\\]/', $formstring, $matches ) ) {
         if ( $steps ) {
@@ -1405,18 +1658,34 @@ function parse_form_for_multistep(  $wpcf7, $steps = false  ) {
 }
 
 /**
+ * Deprecated. Backward-compatible wrapper for the pre-prefix global function.
+ *
+ * @deprecated Use cf7msm_parse_form_for_multistep() instead.
+ */
+if ( !function_exists( 'parse_form_for_multistep' ) ) {
+    // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedFunctionFound -- Retained for backward compatibility with existing integrations that call this long-standing public function.
+    function parse_form_for_multistep(  $wpcf7, $steps = false  ) {
+        return cf7msm_parse_form_for_multistep( $wpcf7, $steps );
+    }
+
+}
+/**
  * return the full url.
  */
 function cf7msm_current_url() {
+    $https = ( isset( $_SERVER['HTTPS'] ) ? sanitize_text_field( wp_unslash( $_SERVER['HTTPS'] ) ) : '' );
+    $server_name = ( isset( $_SERVER['SERVER_NAME'] ) ? sanitize_text_field( wp_unslash( $_SERVER['SERVER_NAME'] ) ) : '' );
+    $server_port = ( isset( $_SERVER['SERVER_PORT'] ) ? sanitize_text_field( wp_unslash( $_SERVER['SERVER_PORT'] ) ) : '' );
+    $request_uri = ( isset( $_SERVER['REQUEST_URI'] ) ? esc_url_raw( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '' );
     $page_url = 'http';
-    if ( isset( $_SERVER["HTTPS"] ) && $_SERVER["HTTPS"] == "on" ) {
-        $page_url .= "s";
+    if ( $https === 'on' ) {
+        $page_url .= 's';
     }
-    $page_url .= "://";
-    if ( isset( $_SERVER["SERVER_PORT"] ) && $_SERVER["SERVER_PORT"] != "80" ) {
-        $page_url .= $_SERVER["SERVER_NAME"] . ":" . $_SERVER["SERVER_PORT"] . $_SERVER["REQUEST_URI"];
+    $page_url .= '://';
+    if ( '' !== $server_port && '80' !== $server_port ) {
+        $page_url .= $server_name . ':' . $server_port . $request_uri;
     } else {
-        $page_url .= $_SERVER["SERVER_NAME"] . $_SERVER["REQUEST_URI"];
+        $page_url .= $server_name . $request_uri;
     }
     return esc_url( $page_url );
 }
@@ -1430,7 +1699,7 @@ function cf7msm_setup_next_url(  $not_used  ) {
         $cf7msm_redirect_urls = array();
     }
     $wpcf7 = WPCF7_ContactForm::get_current();
-    $redirect_url = parse_form_for_multistep( $wpcf7 );
+    $redirect_url = cf7msm_parse_form_for_multistep( $wpcf7 );
     $redirect_url = apply_filters( 'cf7msm_redirect_url', $redirect_url, $wpcf7->id() );
     if ( !empty( $redirect_url ) ) {
         $cf7msm_redirect_urls[$wpcf7->id()] = $redirect_url;

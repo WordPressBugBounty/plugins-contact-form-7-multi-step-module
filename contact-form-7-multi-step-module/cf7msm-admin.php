@@ -1,5 +1,8 @@
 <?php
 
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
 
 /**
  * Tag generator helper scripts
@@ -18,7 +21,8 @@ function cf7msm_admin_enqueue_scripts( $hook_suffix ) {
             array(), CF7MSM_VERSION );
 
         wp_localize_script( 'cf7msm-admin-notice', 'cf7msm_admin', array(
-            'nonce'         => wp_create_nonce( 'cf7msm-admin-nonce' )
+            'nonce'                  => wp_create_nonce( 'cf7msm-admin-nonce' ),
+            'confirm_cookie_warning' => __( 'Are you sure you don\'t want to be notified when your form submissions may be losing data?', 'contact-form-7-multi-step-module' ),
         ));
     }
 
@@ -34,18 +38,10 @@ function cf7msm_admin_enqueue_scripts( $hook_suffix ) {
         array( 'contact-form-7-admin' ), CF7MSM_VERSION );
 
     if ( cf7msm_fs()->is_not_paying() ) {
-        wp_enqueue_script( 'cf7msm-admin-checkout',
-            'https://checkout.freemius.com/checkout.min.js',
-            array( 'jquery' ),
-            CF7MSM_VERSION, true );
-
         wp_enqueue_script( 'cf7msm-admin-panel',
             cf7msm_url( 'resources/cf7msm-admin.min.js' ),
-            array( 'jquery', 'cf7msm-admin-checkout' ),
+            array( 'jquery' ),
             CF7MSM_VERSION, true );
-        wp_localize_script( 'cf7msm-admin-panel', 'cf7msm_admin_panel', array(
-            'url'         => cf7msm_url('')
-        ));
 
         wp_enqueue_style( 'cf7msm-admin-panel',
             cf7msm_url( 'resources/cf7msm-admin.css' ),
@@ -73,13 +69,13 @@ add_action( 'admin_enqueue_scripts', 'cf7msm_admin_enqueue_scripts' );
 function cf7msm_upgrade_panel() {
 ?>
     <div id="upgradediv" class="postbox hide">
-        <h3><?php echo esc_html( __( 'CF7 Multi-Step Forms', 'contact-form-7' ) ); ?></h3>
+        <h3><?php echo esc_html( __( 'Webheadcoder Multi-Step Forms for Contact Form 7', 'contact-form-7-multi-step-module' ) ); ?></h3>
         <div class="inside">
-            <?php echo cf7msm_kses( __( '<p>Not getting all information from your Multi-Step forms? </p><p>Consider upgrading to allow for longer multi-step forms.</p>' ) ); ?>
+            <?php echo wp_kses_post( __( '<p>Not getting all information from your Multi-Step forms? </p><p>Consider upgrading to allow for longer multi-step forms.</p>', 'contact-form-7-multi-step-module' ) ); ?>
             <br>
             <div class="aligncenter">
-                <?php printf( cf7msm_kses( 
-                __( '<a href="#" class="cf7msm-freemius-purchase">Upgrade Now</a><br><a href="%1$s" target="_blank">Learn more</a><a href="%1$s" class="external dashicons dashicons-external" target="_blank"></a>', 'contact-form-7-multi-step-module' ) ), CF7MSM_LEARN_MORE_URL ); ?>
+                <a href="<?php echo esc_url( cf7msm_fs()->get_upgrade_url() ); ?>" class="cf7msm-freemius-purchase"><?php echo esc_html( __( 'Upgrade Now', 'contact-form-7-multi-step-module' ) ); ?></a><br>
+                <a href="<?php echo esc_url( CF7MSM_LEARN_MORE_URL ); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html( __( 'Learn more', 'contact-form-7-multi-step-module' ) ); ?><span class="external dashicons dashicons-external" aria-hidden="true"></span></a>
             </div>
         </div>
     </div><!-- #upgradediv -->
@@ -110,23 +106,23 @@ function cf7msm_review_notice() {
     <div class="notice notice-info cf7msm-notice cf7msm-notice-review">
         <div class="cf7msm-notice-inner">
             <div class="cf7msm-notice-icon">
-                <img src="<?php echo cf7msm_url( '/resources/plugin-icon.png' ) ?>" width="64">
+                <img src="<?php echo esc_url( cf7msm_url( '/resources/plugin-icon.png' ) ); ?>" width="64">
             </div>
             <div class="cf7msm-notice-content">
                 <?php if ( $notice_num == 1 ) : ?>
-                <h3><?php _e( 'Your Multi-Step Forms are doing great!', 'contact-form-7-multi-step-module' ); ?></h3>
-                <p><?php _e( 'When you get a chance, could you help me out by leaving a 5-star review for the <strong>Contact Form 7 Multi-Step Forms</strong> plugin on WordPress?  It makes me feel awesome to know my plugin is helping others.', 'contact-form-7-multi-step-module' ); ?></p>
+                <h3><?php echo esc_html( __( 'Your Multi-Step Forms are doing great!', 'contact-form-7-multi-step-module' ) ); ?></h3>
+                <p><?php echo wp_kses_post( __( 'When you get a chance, could you help me out by leaving a 5-star review for <strong>Webheadcoder Multi-Step Forms for Contact Form 7</strong> on WordPress? It makes me feel awesome to know the plugin is helping others.', 'contact-form-7-multi-step-module' ) ); ?></p>
                 <?php else : ?>
-                <h3><?php _e( 'Wow!  Your Multi-Step Forms are taking off!', 'contact-form-7-multi-step-module' ); ?></h3>
-                <p><?php _e( 'I would really appreciate if you could leave a 5-star review for the <strong>Contact Form 7 Multi-Step Forms</strong> plugin on WordPress.  It really helps to hear people are actually benefiting from my work.', 'contact-form-7-multi-step-module' ); ?></p>
+                <h3><?php echo esc_html( __( 'Wow!  Your Multi-Step Forms are taking off!', 'contact-form-7-multi-step-module' ) ); ?></h3>
+                <p><?php echo wp_kses_post( __( 'I would really appreciate it if you could leave a 5-star review for <strong>Webheadcoder Multi-Step Forms for Contact Form 7</strong> on WordPress. It helps to hear that people are benefiting from the plugin.', 'contact-form-7-multi-step-module' ) ); ?></p>
                 <?php endif; ?>
             </div>
             <div class="cf7msm-notice-actions">
-                <a href="https://wordpress.org/support/view/plugin-reviews/contact-form-7-multi-step-module#new-post" class="button button-primary cf7msm-review-button" target="_blank">Leave a Review</a>
+                <a href="https://wordpress.org/support/view/plugin-reviews/contact-form-7-multi-step-module#new-post" class="button button-primary cf7msm-review-button" target="_blank"><?php echo esc_html( __( 'Leave a Review', 'contact-form-7-multi-step-module' ) ); ?></a>
                 <div class="other-buttons">
-                    <a href="#" class="cf7msm-did">I already did</a>
+                    <a href="#" class="cf7msm-did"><?php echo esc_html( __( 'I already did', 'contact-form-7-multi-step-module' ) ); ?></a>
                     <span class="spacer">|</span>
-                    <a href="#" class="cf7msm-later">Maybe later</a>
+                    <a href="#" class="cf7msm-later"><?php echo esc_html( __( 'Maybe later', 'contact-form-7-multi-step-module' ) ); ?></a>
 
                 </div>
             </div>
@@ -168,21 +164,24 @@ function cf7msm_big_cookie_notice() {
     <div class="notice notice-error cf7msm-notice cf7msm-notice-cookie">
         <div class="cf7msm-notice-inner">
             <div class="cf7msm-notice-icon">
-                <img src="<?php echo cf7msm_url( '/resources/plugin-icon.png' ) ?>" width="64">
+                <img src="<?php echo esc_url( cf7msm_url( '/resources/plugin-icon.png' ) ); ?>" width="64">
             </div>
             <div class="cf7msm-notice-content">
-                <h3><?php _e( 'Your Multi-Step Forms are in danger of losing data!', 'contact-form-7-multi-step-module' ); ?></h3>
-                <p><?php echo sprintf( __( '<strong>%s</strong> multi-step form submissions have exceeded 90%% of the standard browser\'s cookie size.  You may not be getting everything your users submit from your multi-step forms!' ), $num_cookies_str ); ?>
-                    <span style="display: block; padding-top: 10px"><?php _e( 'Upgrade to the PRO version of the <strong>Contact Form 7 Multi-Step Forms</strong> plugin before this happens again!', 'contact-form-7-multi-step-module' ); ?></p>
+                <h3><?php echo esc_html( __( 'Your Multi-Step Forms are in danger of losing data!', 'contact-form-7-multi-step-module' ) ); ?></h3>
+                <p><?php
+                    /* translators: %1$s: number of oversized form submissions. */
+                    echo wp_kses_post( sprintf( __( '<strong>%1$s</strong> multi-step form submissions have exceeded 90%% of the standard browser\'s cookie size.  You may not be getting everything your users submit from your multi-step forms!', 'contact-form-7-multi-step-module' ), esc_html( $num_cookies_str ) ) );
+                ?>
+                    <span style="display: block; padding-top: 10px"><?php echo wp_kses_post( __( 'Upgrade to the Pro version of <strong>Webheadcoder Multi-Step Forms for Contact Form 7</strong> before this happens again!', 'contact-form-7-multi-step-module' ) ); ?></span></p>
             </div>
             <div class="cf7msm-notice-actions">
-                <a href="<?php echo CF7MSM_LEARN_MORE_URL; ?>" class="button button-primary cf7msm-review-button" target="_blank"><?php _e( 'Upgrade to Pro', 'contact-form-7-multi-step-module' ); ?> <span class="external dashicons dashicons-external" ></span></a>
+                <a href="<?php echo esc_url( cf7msm_fs()->get_upgrade_url() ); ?>" class="button button-primary cf7msm-review-button"><?php echo esc_html( __( 'Upgrade to Pro', 'contact-form-7-multi-step-module' ) ); ?></a>
 
 
                 <div class="other-buttons">
-                    <a href="#" class="cf7msm-later"><?php _e( 'Remind me later if this continues', 'contact-form-7-multi-step-module' ); ?></a>
+                    <a href="#" class="cf7msm-later"><?php echo esc_html( __( 'Remind me later if this continues', 'contact-form-7-multi-step-module' ) ); ?></a>
 
-                    <a href="#" class="trash cf7msm-did"><?php _e( 'Don\'t show again', 'contact-form-7-multi-step-module '); ?></a>
+                    <a href="#" class="trash cf7msm-did"><?php echo esc_html( __( 'Don\'t show again', 'contact-form-7-multi-step-module' ) ); ?></a>
                 </div>
             </div>
         </div>
@@ -251,14 +250,13 @@ function cf7msm_maybe_display_notice_big_cookie() {
 /**
  * note at top of form tags
  */
-function cf7msm_form_tag_header_text( $header_description ) {
-    $description = $header_description . __( ". For more details, see %s.", 'contact-form-7' );
+function cf7msm_form_tag_header_text( $description ) {
     $desc_link = wpcf7_link( 
         'https://wordpress.org/plugins/contact-form-7-multi-step-module/', 
         esc_html( __( 'the plugin page on WordPress.org', 'contact-form-7-multi-step-module' ) ), 
         array( 'target' => '_blank' )
     );
-    printf( esc_html( $description ), $desc_link );
+    echo wp_kses_post( sprintf( $description, $desc_link ) );
 }
 
 /**
@@ -269,13 +267,16 @@ function cf7msm_form_tag_footer_text() {
 ?>
     <p class="description" style="font-size:12px;margin-top:0;padding-top:0;font-style:normal;">
         <?php 
-        printf( cf7msm_kses( 
-            __( 'Let me know how the Multi-Step forms are working for you <a href="%s" target="_blank">here</a>.', 'contact-form-7-multi-step-module' )
-            ), $url_review );
+        /* translators: %1$s: URL of the plugin review page on WordPress.org. */
+        $review_prompt = __( 'Let me know how the Multi-Step forms are working for you <a href="%1$s" target="_blank">here</a>.', 'contact-form-7-multi-step-module' );
+        echo wp_kses_post( sprintf(
+            $review_prompt,
+            esc_url( $url_review )
+        ) );
          ?>
     </p>
     <div style="position:absolute; right:25px; bottom:5px;">
-        <a href="https://webheadcoder.com" target="_blank"><img src="<?php echo cf7msm_url( '/resources/logo.png' )?>" width="40"></a>
+        <a href="https://webheadcoder.com" target="_blank"><img src="<?php echo esc_url( cf7msm_url( '/resources/logo.png' ) ); ?>" width="40"></a>
     </div>
 <?php
 }
@@ -287,6 +288,9 @@ function cf7msm_form_tag_footer_text() {
  */
 function cf7msm_notice_response() {
     if ( !check_ajax_referer('cf7msm-admin-nonce', 'nonce', false) ){
+        wp_send_json( 0 );
+    }
+    if ( !current_user_can( 'manage_options' ) ) {
         wp_send_json( 0 );
     }
     if ( !isset( $_POST['request_type'] ) ) {
@@ -317,6 +321,9 @@ add_action('wp_ajax_cf7msm-notice-response', 'cf7msm_notice_response');
  */
 function cf7msm_notice_response_big_cookie() {
     if ( !check_ajax_referer('cf7msm-admin-nonce', 'nonce', false) ){
+        wp_send_json( 0 );
+    }
+    if ( !current_user_can( 'manage_options' ) ) {
         wp_send_json( 0 );
     }
     if ( !isset( $_POST['request_type'] ) ) {

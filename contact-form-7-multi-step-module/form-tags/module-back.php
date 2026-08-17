@@ -17,6 +17,10 @@
 
 */
 
+if ( ! defined( 'ABSPATH' ) ) {
+    exit;
+}
+
 /**
  * Initialize this wpcf7 shortcode.
  */
@@ -91,7 +95,7 @@ function cf7msm_add_tag_generator_back() {
     }
     else if ( function_exists( 'wpcf7_add_tag_generator' ) ) {
 		wpcf7_add_tag_generator( 'back', esc_html( __( 'Back button', 'contact-form-7-multi-step-module' ) ),
-			'wpcf7-cf7msm-back', 'wpcf7_cf7msm_back', array( 'nameless' => 1 ) );
+			'wpcf7-cf7msm-back', 'cf7msm_tg_pane_back', array( 'nameless' => 1 ) );
     }
 }
 add_action( 'admin_init', 'cf7msm_add_tag_generator_back', 55 );
@@ -107,14 +111,17 @@ function cf7msm_previous_tag_pane( $contact_form, $args = '' ) {
 ?>
 
 <header class="description-box">
-	<h3>Multi Step form-tag generator</h3>
+	<h3><?php echo esc_html( __( 'Multi-step form-tag generator', 'contact-form-7-multi-step-module' ) ); ?></h3>
 
-	<p><?php cf7msm_form_tag_header_text( 'Generate a form-tag for a previous button for a multistep form' ); ?></p>
+	<p><?php
+        /* translators: %1$s: link to the plugin page on WordPress.org. */
+        cf7msm_form_tag_header_text( __( 'Generate a form-tag for a previous button for a multistep form. For more details, see %1$s.', 'contact-form-7-multi-step-module' ) );
+    ?></p>
 </header>
 <div class="control-box cf7msm-multistep">
     <input type="hidden" data-tag-part="basetype" value="previous">
     <fieldset>
-        <legend id="<?php echo esc_attr( $args['content'] . '-name-legend' ); ?>">Name</legend>
+        <legend id="<?php echo esc_attr( $args['content'] . '-name-legend' ); ?>"><?php echo esc_html( __( 'Name', 'contact-form-7-multi-step-module' ) ); ?></legend>
         <input type="text" data-tag-part="name" pattern="[A-Za-z][A-Za-z0-9_\-]*" aria-labelledby="<?php echo esc_attr( $args['content'] . '-name-legend' ); ?>">
     </fieldset>
     <fieldset>
@@ -136,7 +143,7 @@ function cf7msm_previous_tag_pane( $contact_form, $args = '' ) {
 
 <footer class="insert-box">
         <div class="flex-container">
-            <input type="text" class="code" readonly="readonly" onfocus="this.select();" data-tag-part="tag" aria-label="The form-tag to be inserted into the form template">
+            <input type="text" class="code" readonly="readonly" onfocus="this.select();" data-tag-part="tag" aria-label="<?php echo esc_attr( __( 'The form-tag to be inserted into the form template', 'contact-form-7-multi-step-module' ) ); ?>">
             <button type="button" class="button button-primary" data-taggen="insert-tag"><?php echo esc_html( __( 'Insert Tag', 'contact-form-7-multi-step-module' ) ); ?></button>
             
         </div>
@@ -150,7 +157,7 @@ function cf7msm_previous_tag_pane( $contact_form, $args = '' ) {
 /**
  * Deprecated way to generate back tag.
  */
-function wpcf7_cf7msm_back( $contact_form ) {
+function cf7msm_tg_pane_back( $contact_form ) {
 ?>
 <div id="wpcf7-cf7msm-back" class="hidden">
 <form action="">
@@ -164,7 +171,7 @@ function wpcf7_cf7msm_back( $contact_form ) {
 </tr>
 
 <tr>
-<td><?php echo esc_html( __( 'Label', 'wpcf7' ) ); ?> (<?php echo esc_html( __( 'optional', 'contact-form-7-multi-step-module' ) ); ?>)<br />
+<td><?php echo esc_html( __( 'Label', 'contact-form-7-multi-step-module' ) ); ?> (<?php echo esc_html( __( 'optional', 'contact-form-7-multi-step-module' ) ); ?>)<br />
 <input type="text" name="values" class="oneline" /></td>
 
 <td></td>
@@ -186,7 +193,10 @@ function cf7msm_previous_tag_pane_old( $contact_form, $args = '' ) {
 ?>
 <div class="control-box cf7msm-multistep">
     <fieldset>
-        <legend><?php cf7msm_form_tag_header_text( esc_html( __( 'Generate a form-tag for a previous button for a multistep form', 'contact-form-7-multi-step-module' ) ) ); ?></legend>
+        <legend><?php
+            /* translators: %1$s: link to the plugin page on WordPress.org. */
+            cf7msm_form_tag_header_text( __( 'Generate a form-tag for a previous button for a multistep form. For more details, see %1$s.', 'contact-form-7-multi-step-module' ) );
+        ?></legend>
         <table class="form-table">
         <tbody>
             <tr>

@@ -5,9 +5,10 @@ Plugin Name: Webheadcoder Multi-Step Forms for Contact Form 7
 Plugin URI: https://webheadcoder.com/contact-form-7-multi-step-forms/
 Description: Adds multi-page, multi-step forms to Contact Form 7.
 Requires Plugins:  contact-form-7
+Requires PHP: 7.3
 Author: Webhead LLC.
 Author URI: https://webheadcoder.com/
-Version: 4.7
+Version: 4.7.1
 Text Domain: contact-form-7-multi-step-module
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -75,7 +76,7 @@ if ( function_exists( 'cf7msm_fs' ) ) {
         cf7msm_fs();
         // Signal that SDK was initiated.
         do_action( 'cf7msm_fs_loaded' );
-        define( 'CF7MSM_VERSION', '4.7' );
+        define( 'CF7MSM_VERSION', '4.7.1' );
         define( 'CF7MSM_PLUGIN', __FILE__ );
         define( 'CF7MSM_FREE_TEXT_PREFIX_RADIO', '_wpcf7_free_text_' );
         define( 'CF7MSM_FREE_TEXT_PREFIX_CHECKBOX', '_wpcf7_free_text_' );

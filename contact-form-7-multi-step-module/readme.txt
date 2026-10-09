@@ -1,9 +1,10 @@
 === Webheadcoder Multi-Step Forms for Contact Form 7 ===
-Contributors: webheadllc
+Contributors: webheadllc, freemius
 Tags: contact form 7, multistep form, multi page form, form persistence
 Requires at least: 4.7
+Requires PHP: 7.3
 Tested up to: 7.1
-Stable tag: 4.7
+Stable tag: 4.7.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -160,6 +161,12 @@ Add a hidden field with the same name on the last step, for example:
 This ensures the final step submits either the saved value or a blank value.
 
 == Changelog ==
+
+= 4.7.1 - October 2026 =
+* security fix: patched a cross-site scripting (XSS) vulnerability in how form data is carried between steps.  
+* hardened the form data cookie.  
+* now requires PHP 7.3 or above. 
+* updated Freemius.   
 
 = 4.7 - August 2026 =
 * renamed plugin for WordPress.org plugin compliance.  

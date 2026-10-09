@@ -174,19 +174,39 @@ function cf7msm_scripts() {
         true
     );
     $cf7msm_posted_data = cf7msm_remove_honeypot_fields_from_posted_data( cf7msm_get( 'cf7msm_posted_data', [] ) );
-    if ( empty( $cf7msm_posted_data ) ) {
+    if ( !is_array( $cf7msm_posted_data ) ) {
         $cf7msm_posted_data = array();
     }
-    wp_localize_script( 'cf7msm', 'cf7msm_posted_data', $cf7msm_posted_data );
+    // Keep saved fields as JSON data; wp_localize_script() treats a reserved
+    // array key as executable code. Escape HTML delimiters for the script tag.
+    $posted_data_json = wp_json_encode( $cf7msm_posted_data, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT );
+    wp_add_inline_script( 'cf7msm', 'var cf7msm_posted_data = ' . (( false === $posted_data_json ? '[]' : $posted_data_json )) . ';', 'before' );
     wp_localize_script( 'cf7msm', 'cf7msm_honeypot_field_matchers', cf7msm_get_active_honeypot_field_matchers() );
 }
 
 add_action( 'wp_enqueue_scripts', 'cf7msm_scripts' );
 /**
+ * Cookie attributes for saved form data, shared by writes and deletion.
+ */
+function cf7msm_posted_data_cookie_options(  $expires = 0  ) {
+    return array(
+        'expires'  => $expires,
+        'path'     => COOKIEPATH,
+        'domain'   => COOKIE_DOMAIN,
+        'secure'   => is_ssl(),
+        'httponly' => true,
+        'samesite' => 'Lax',
+    );
+}
+
+/**
  *  Saves a variable to cookies or if not enabled, to session.
  */
 function cf7msm_set(  $var_name, $var_value  ) {
     $var_value = wp_unslash( $var_value );
+    if ( 'cf7msm_posted_data' === $var_name ) {
+        $var_value = cf7msm_sanitize_posted_data( $var_value );
+    }
     if ( cf7msm_activate_php_session( true ) ) {
         $_SESSION[$var_name] = $var_value;
         return;
@@ -199,13 +219,17 @@ function cf7msm_set(  $var_name, $var_value  ) {
         $json_encoded = json_encode( $var_value );
     }
     if ( !headers_sent() ) {
-        setcookie(
-            $var_name,
-            $json_encoded,
-            0,
-            COOKIEPATH,
-            COOKIE_DOMAIN
-        );
+        if ( 'cf7msm_posted_data' === $var_name ) {
+            setcookie( $var_name, $json_encoded, cf7msm_posted_data_cookie_options() );
+        } else {
+            setcookie(
+                $var_name,
+                $json_encoded,
+                0,
+                COOKIEPATH,
+                COOKIE_DOMAIN
+            );
+        }
     }
 }
 
@@ -225,6 +249,14 @@ function cf7msm_get(  $var_name, $default = ''  ) {
         $ret = ( isset( $_COOKIE[$var_name] ) ? cf7msm_sanitize_posted_data( wp_unslash( $_COOKIE[$var_name] ) ) : $default );
         if ( is_string( $ret ) ) {
             $ret = json_decode( $ret, true );
+        }
+    }
+    // Sanitize decoded cookie keys too, including cookies saved before this fix.
+    if ( 'cf7msm_posted_data' === $var_name ) {
+        $ret = cf7msm_sanitize_posted_data( $ret );
+        // An empty session returns the string default; PHP 8 fatals when keys are added to it.
+        if ( !is_array( $ret ) ) {
+            $ret = array();
         }
     }
     // Conditional Fields plugin throws 500 error when these aren't set.
@@ -403,13 +435,17 @@ function cf7msm_remove(  $var_name  ) {
         }
     } else {
         if ( isset( $_COOKIE[$var_name] ) ) {
-            setcookie(
-                $var_name,
-                '',
-                1,
-                COOKIEPATH,
-                COOKIE_DOMAIN
-            );
+            if ( 'cf7msm_posted_data' === $var_name ) {
+                setcookie( $var_name, '', cf7msm_posted_data_cookie_options( 1 ) );
+            } else {
+                setcookie(
+                    $var_name,
+                    '',
+                    1,
+                    COOKIEPATH,
+                    COOKIE_DOMAIN
+                );
+            }
         }
     }
 }
@@ -1796,10 +1832,12 @@ function cf7msm_maybe_set_big_cookie_notice() {
 }
 
 /**
- * from cf7 submission.php
+ * Sanitize saved values and remove the reserved WordPress localization key.
  */
 function cf7msm_sanitize_posted_data(  $value  ) {
     if ( is_array( $value ) ) {
+        // WordPress appends this key as executable code in wp_localize_script().
+        unset($value['l10n_print_after']);
         $value = array_map( 'cf7msm_sanitize_posted_data', $value );
     } elseif ( is_string( $value ) ) {
         $value = wp_check_invalid_utf8( $value );
